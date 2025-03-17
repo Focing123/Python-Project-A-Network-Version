@@ -1,0 +1,400 @@
+
+    <html>
+    <head>
+        <title>Game Units, Buildings, and Resources Report</title>
+        <style>
+            body { font-family: Arial, sans-serif; background-color: #f4f4f9; color: #333; margin: 20px; }
+            h1 { color: #444; text-align: center; }
+            h2 { color: #444; }
+            .player-section {
+                background-color: #ffffff;
+                padding: 20px;
+                margin: 20px auto;
+                border-radius: 10px;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+                max-width: 800px;
+            }
+            .info { margin-bottom: 20px; font-size: 14px; color: #666; }
+            .collapsible {
+                background-color: #007BFF;
+                color: white;
+                cursor: pointer;
+                padding: 10px;
+                width: 100%;
+                border: none;
+                text-align: left;
+                outline: none;
+                font-size: 16px;
+                border-radius: 5px;
+                margin-top: 10px;
+            }
+            .active, .collapsible:hover { background-color: #0056b3; }
+            .content {
+                padding: 0 18px;
+                display: none;
+                overflow: hidden;
+                background-color: #f1f1f1;
+                border-left: 3px solid #007BFF;
+                margin-bottom: 10px;
+                border-radius: 0 0 5px 5px;
+            }
+            .unit-info, .building-info {
+                padding: 10px;
+                border-bottom: 1px solid #ddd;
+            }
+            .unit-info:last-child, .building-info:last-child { border-bottom: none; }
+            .progress-bar {
+                background-color: #e0e0e0;
+                border-radius: 5px;
+                overflow: hidden;
+                width: 100%;
+                height: 15px;
+                margin-top: 5px;
+            }
+            .progress {
+                height: 100%;
+                background-color: #28a745;
+                border-radius: 5px;
+                width: 0%;
+                transition: width 0.5s;
+            }
+            .unit-proportion-bar {
+                width: 100%;
+                height: 30px;
+                background-color: #e0e0e0;
+                border-radius: 5px;
+                overflow: hidden;
+                margin: 20px auto;
+                display: flex;
+                max-width: 800px;
+            }
+            .proportion-segment {
+                height: 100%;
+                transition: width 0.5s;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-size: 12px;
+                text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            }
+            .unit-proportion-legend {
+                display: flex;
+                justify-content: center;
+                flex-wrap: wrap;
+                gap: 10px;
+                margin: 10px 0;
+                max-width: 800px;
+                margin: 10px auto;
+            }
+            .legend-item {
+                display: flex;
+                align-items: center;
+                margin: 0 10px;
+            }
+            .legend-color {
+                width: 20px;
+                height: 20px;
+                margin-right: 5px;
+                border-radius: 3px;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Game Units, Buildings, and Resources Report</h1>
+    <div class="unit-proportion-bar">
+                <div class="proportion-segment" style="width: 14.285714285714285%; background-color: hsl(0, 70%, 50%);">
+                    14.3%
+                </div>
+            
+                <div class="proportion-segment" style="width: 14.285714285714285%; background-color: hsl(120, 70%, 50%);">
+                    14.3%
+                </div>
+            
+                <div class="proportion-segment" style="width: 71.42857142857143%; background-color: hsl(240, 70%, 50%);">
+                    71.4%
+                </div>
+            </div><div class="unit-proportion-legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: hsl(0, 70%, 50%)"></div>
+                <span>Player 1 (3 units)</span>
+            </div>
+        
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: hsl(120, 70%, 50%)"></div>
+                <span>Player 2 (3 units)</span>
+            </div>
+        
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: hsl(240, 70%, 50%)"></div>
+                <span>Player 3 (15 units)</span>
+            </div>
+        </div>
+        <div class="player-section">
+            <h2>Player 1 </h2>
+            <div class="info">
+                <p>Population: 3/5</p>
+                <div class="progress-bar">
+                    <div class="progress" style="width: 60.0%;"></div>
+                </div>
+                <p>Resources | Wood: 200 | Food: 50 | Gold: 50</p>
+            </div>
+            <button class="collapsible">Show Units</button>
+            <div class="content">
+
+        
+            <button class="collapsible">Villager (3)</button>
+            <div class="content">
+            
+                    <div class="unit-info">
+                        <h3>Aicha (HP: 25)</h3>
+                        <p>Position: (118.00, 59.00)</p>
+                        <p>Task: None</p>
+                    </div>
+                    
+                    <div class="unit-info">
+                        <h3>Raphaelle (HP: 25)</h3>
+                        <p>Position: (118.00, 62.00)</p>
+                        <p>Task: None</p>
+                    </div>
+                    
+                    <div class="unit-info">
+                        <h3>Paula (HP: 25)</h3>
+                        <p>Position: (115.00, 66.00)</p>
+                        <p>Task: None</p>
+                    </div>
+                    </div>
+            <button class="collapsible">Swordsman (0)</button>
+            <div class="content">
+            <p>No units available</p></div>
+            <button class="collapsible">Horseman (0)</button>
+            <div class="content">
+            <p>No units available</p></div>
+            <button class="collapsible">Archer (0)</button>
+            <div class="content">
+            <p>No units available</p></div></div><button class='collapsible'>Show Buildings</button><div class='content'><button class='collapsible'>Town Center (1)</button><div class='content'>
+                    <div class='building-info'>
+                        <h3>Town Center (HP: 1000)</h3>
+                        <p>Position: (114, 60)</p>
+                    </div>
+                    </div><button class='collapsible'>House (0)</button><div class='content'><p>No buildings available</p></div><button class='collapsible'>Camp (0)</button><div class='content'><p>No buildings available</p></div><button class='collapsible'>Farm (0)</button><div class='content'><p>No buildings available</p></div><button class='collapsible'>Barracks (0)</button><div class='content'><p>No buildings available</p></div><button class='collapsible'>Stable (0)</button><div class='content'><p>No buildings available</p></div><button class='collapsible'>Archery Range (0)</button><div class='content'><p>No buildings available</p></div><button class='collapsible'>Keep (0)</button><div class='content'><p>No buildings available</p></div></div></div>
+        <div class="player-section">
+            <h2>Player 2 </h2>
+            <div class="info">
+                <p>Population: 3/5</p>
+                <div class="progress-bar">
+                    <div class="progress" style="width: 60.0%;"></div>
+                </div>
+                <p>Resources | Wood: 2000 | Food: 2000 | Gold: 2000</p>
+            </div>
+            <button class="collapsible">Show Units</button>
+            <div class="content">
+
+        
+            <button class="collapsible">Villager (3)</button>
+            <div class="content">
+            
+                    <div class="unit-info">
+                        <h3>Octave (HP: 25)</h3>
+                        <p>Position: (34.00, 104.00)</p>
+                        <p>Task: None</p>
+                    </div>
+                    
+                    <div class="unit-info">
+                        <h3>Kathleen (HP: 25)</h3>
+                        <p>Position: (31.00, 106.00)</p>
+                        <p>Task: None</p>
+                    </div>
+                    
+                    <div class="unit-info">
+                        <h3>Sylvette (HP: 25)</h3>
+                        <p>Position: (39.00, 106.00)</p>
+                        <p>Task: None</p>
+                    </div>
+                    </div>
+            <button class="collapsible">Swordsman (0)</button>
+            <div class="content">
+            <p>No units available</p></div>
+            <button class="collapsible">Horseman (0)</button>
+            <div class="content">
+            <p>No units available</p></div>
+            <button class="collapsible">Archer (0)</button>
+            <div class="content">
+            <p>No units available</p></div></div><button class='collapsible'>Show Buildings</button><div class='content'><button class='collapsible'>Town Center (1)</button><div class='content'>
+                    <div class='building-info'>
+                        <h3>Town Center (HP: 1000)</h3>
+                        <p>Position: (34, 106)</p>
+                    </div>
+                    </div><button class='collapsible'>House (0)</button><div class='content'><p>No buildings available</p></div><button class='collapsible'>Camp (0)</button><div class='content'><p>No buildings available</p></div><button class='collapsible'>Farm (0)</button><div class='content'><p>No buildings available</p></div><button class='collapsible'>Barracks (0)</button><div class='content'><p>No buildings available</p></div><button class='collapsible'>Stable (0)</button><div class='content'><p>No buildings available</p></div><button class='collapsible'>Archery Range (0)</button><div class='content'><p>No buildings available</p></div><button class='collapsible'>Keep (0)</button><div class='content'><p>No buildings available</p></div></div></div>
+        <div class="player-section">
+            <h2>Player 3 </h2>
+            <div class="info">
+                <p>Population: 15/15</p>
+                <div class="progress-bar">
+                    <div class="progress" style="width: 100.0%;"></div>
+                </div>
+                <p>Resources | Wood: 20000 | Food: 20000 | Gold: 20000</p>
+            </div>
+            <button class="collapsible">Show Units</button>
+            <div class="content">
+
+        
+            <button class="collapsible">Villager (15)</button>
+            <div class="content">
+            
+                    <div class="unit-info">
+                        <h3>Bruce (HP: 25)</h3>
+                        <p>Position: (39.00, 13.00)</p>
+                        <p>Task: None</p>
+                    </div>
+                    
+                    <div class="unit-info">
+                        <h3>Louis-Marie (HP: 25)</h3>
+                        <p>Position: (31.00, 10.00)</p>
+                        <p>Task: None</p>
+                    </div>
+                    
+                    <div class="unit-info">
+                        <h3>Dimitri (HP: 25)</h3>
+                        <p>Position: (34.00, 10.00)</p>
+                        <p>Task: None</p>
+                    </div>
+                    
+                    <div class="unit-info">
+                        <h3>Ludovic (HP: 25)</h3>
+                        <p>Position: (33.00, 13.00)</p>
+                        <p>Task: None</p>
+                    </div>
+                    
+                    <div class="unit-info">
+                        <h3>Melodie (HP: 25)</h3>
+                        <p>Position: (32.00, 18.00)</p>
+                        <p>Task: None</p>
+                    </div>
+                    
+                    <div class="unit-info">
+                        <h3>Ralph (HP: 25)</h3>
+                        <p>Position: (33.00, 10.00)</p>
+                        <p>Task: None</p>
+                    </div>
+                    
+                    <div class="unit-info">
+                        <h3>eloise (HP: 25)</h3>
+                        <p>Position: (32.00, 10.00)</p>
+                        <p>Task: None</p>
+                    </div>
+                    
+                    <div class="unit-info">
+                        <h3>Ahmad (HP: 25)</h3>
+                        <p>Position: (38.00, 13.00)</p>
+                        <p>Task: None</p>
+                    </div>
+                    
+                    <div class="unit-info">
+                        <h3>Jocelyne (HP: 25)</h3>
+                        <p>Position: (30.00, 13.00)</p>
+                        <p>Task: None</p>
+                    </div>
+                    
+                    <div class="unit-info">
+                        <h3>Jose (HP: 25)</h3>
+                        <p>Position: (36.00, 10.00)</p>
+                        <p>Task: None</p>
+                    </div>
+                    
+                    <div class="unit-info">
+                        <h3>edith (HP: 25)</h3>
+                        <p>Position: (28.00, 12.00)</p>
+                        <p>Task: None</p>
+                    </div>
+                    
+                    <div class="unit-info">
+                        <h3>Andre (HP: 25)</h3>
+                        <p>Position: (29.00, 9.00)</p>
+                        <p>Task: None</p>
+                    </div>
+                    
+                    <div class="unit-info">
+                        <h3>Mercedes (HP: 25)</h3>
+                        <p>Position: (36.00, 11.00)</p>
+                        <p>Task: None</p>
+                    </div>
+                    
+                    <div class="unit-info">
+                        <h3>Eveline (HP: 25)</h3>
+                        <p>Position: (37.00, 11.00)</p>
+                        <p>Task: None</p>
+                    </div>
+                    
+                    <div class="unit-info">
+                        <h3>Audrey (HP: 25)</h3>
+                        <p>Position: (33.00, 12.00)</p>
+                        <p>Task: None</p>
+                    </div>
+                    </div>
+            <button class="collapsible">Swordsman (0)</button>
+            <div class="content">
+            <p>No units available</p></div>
+            <button class="collapsible">Horseman (0)</button>
+            <div class="content">
+            <p>No units available</p></div>
+            <button class="collapsible">Archer (0)</button>
+            <div class="content">
+            <p>No units available</p></div></div><button class='collapsible'>Show Buildings</button><div class='content'><button class='collapsible'>Town Center (3)</button><div class='content'>
+                    <div class='building-info'>
+                        <h3>Town Center (HP: 1000)</h3>
+                        <p>Position: (33, 14)</p>
+                    </div>
+                    
+                    <div class='building-info'>
+                        <h3>Town Center (HP: 1000)</h3>
+                        <p>Position: (38, 14)</p>
+                    </div>
+                    
+                    <div class='building-info'>
+                        <h3>Town Center (HP: 1000)</h3>
+                        <p>Position: (28, 14)</p>
+                    </div>
+                    </div><button class='collapsible'>House (0)</button><div class='content'><p>No buildings available</p></div><button class='collapsible'>Camp (0)</button><div class='content'><p>No buildings available</p></div><button class='collapsible'>Farm (0)</button><div class='content'><p>No buildings available</p></div><button class='collapsible'>Barracks (2)</button><div class='content'>
+                    <div class='building-info'>
+                        <h3>Barracks (HP: 500)</h3>
+                        <p>Position: (43, 18)</p>
+                    </div>
+                    
+                    <div class='building-info'>
+                        <h3>Barracks (HP: 500)</h3>
+                        <p>Position: (24, 10)</p>
+                    </div>
+                    </div><button class='collapsible'>Stable (2)</button><div class='content'>
+                    <div class='building-info'>
+                        <h3>Stable (HP: 500)</h3>
+                        <p>Position: (43, 10)</p>
+                    </div>
+                    
+                    <div class='building-info'>
+                        <h3>Stable (HP: 500)</h3>
+                        <p>Position: (24, 18)</p>
+                    </div>
+                    </div><button class='collapsible'>Archery Range (2)</button><div class='content'>
+                    <div class='building-info'>
+                        <h3>Archery Range (HP: 500)</h3>
+                        <p>Position: (46, 14)</p>
+                    </div>
+                    
+                    <div class='building-info'>
+                        <h3>Archery Range (HP: 500)</h3>
+                        <p>Position: (21, 14)</p>
+                    </div>
+                    </div><button class='collapsible'>Keep (0)</button><div class='content'><p>No buildings available</p></div></div></div>
+        <script>
+            document.querySelectorAll('.collapsible').forEach((coll) => {
+                coll.addEventListener('click', () => {
+                    coll.classList.toggle('active');
+                    const content = coll.nextElementSibling;
+                    content.style.display = content.style.display === 'block' ? 'none' : 'block';
+                });
+            });
+        </script>
+    </body>
+    </html>
+    
