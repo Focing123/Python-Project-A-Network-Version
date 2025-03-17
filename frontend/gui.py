@@ -15,6 +15,8 @@ from PIL import Image
 import copy
 import sys
 
+current_dir = os.path.dirname(__file__)
+
 def draw_fireball(screen, start_pos, target_pos, progress, fireball_image):
 
     # Calcul de la position intermédiaire en fonction de la progression
@@ -1330,7 +1332,8 @@ class GUI(threading.Thread):
             'loading_bar': (107, 28, 35)
         }
 
-        self.load_screen = pygame.image.load(r'..\assets\MenuPhoto\loading_screen.png')
+        image_path4 = os.path.join(current_dir, '..', 'assets', 'MenuPhoto', 'loading_screen.png')
+        self.load_screen = pygame.image.load(image_path4)
         self.load_screen = pygame.transform.scale(self.load_screen, (800, 600))
 
         # Loading messages
