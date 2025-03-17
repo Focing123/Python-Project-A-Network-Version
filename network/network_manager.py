@@ -29,8 +29,6 @@ class NetworkManager:
                             "target_position": getattr(unit, "target_position", None),
                             "target_attack": getattr(unit, "target_attack", None),
                             "is_attacked_by": getattr(unit, "is_attacked_by", None),
-                            "spawn_building": getattr(unit, "spawn_building", None),
-                            "spawn_position": getattr(unit, "spawn_position", None),
                             "direction": getattr(unit, "direction", "south"),
                             "current_frame": getattr(unit, "current_frame", 0),
                             "frame_counter": getattr(unit, "frame_counter", 0),
@@ -43,9 +41,7 @@ class NetworkManager:
                         {
                             "name": getattr(b, "name", None),
                             "hp": getattr(b, "hp", None),
-                            "built": getattr(b, "built", False),
                             "position": getattr(b, "position", None),
-                            "nb_workers": getattr(b, "nb_workers", None),
                             "is_attacked": getattr(b, "is_attacked", False)
                         }
                         for b in getattr(player, "buildings", [])
