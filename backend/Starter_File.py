@@ -22,6 +22,8 @@ players = []
 
 global_speedS = 10
 
+current_dir = os.path.dirname(__file__)
+
 class StartMenu:
     def __init__(self, screen_width=800, screen_height=600):
         pygame.init()
@@ -33,13 +35,16 @@ class StartMenu:
             'button': (100, 100, 100),
             'button_hover': (150, 150, 150),
             'text': (255, 255, 255),
-            'disabled': (80, 80, 80)  # Color for disabled buttons
+            'disabled': (80, 80, 80)
         }
+
+        # Récupérer le chemin absolu du dossier backend
         
-        # Charger l'image de fond
-        self.background_image = pygame.image.load(r'..\assets\MenuPhoto\menu.png')
+        image_path = os.path.join(current_dir, '..', 'assets', 'MenuPhoto', 'menu.png')
+
+        # Charger et redimensionner l'image de fond
+        self.background_image = pygame.image.load(image_path)
         self.background_image = pygame.transform.scale(self.background_image, (screen_width, screen_height))
-        # Adapter l'image à la taille de l'écran
 
         # Adjusted button positions for 3 buttons
         self.buttons = [
@@ -294,8 +299,8 @@ class GameSettingsMenu:
             'selected': (120, 160, 120),
             'input_bg': (70, 70, 70)
         }
-        
-        self.settingmenu_image = pygame.image.load(r'..\assets\MenuPhoto\parametrebueno.png')
+        image_path1 = os.path.join(current_dir, '..', 'assets', 'MenuPhoto', 'parametrebueno.png')
+        self.settingmenu_image = pygame.image.load(image_path1)
         self.settingmenu_image = pygame.transform.scale(self.settingmenu_image, (screen_width, screen_height))
 
         self.font = pygame.font.Font(None, 36)
@@ -603,7 +608,8 @@ class PlayerSettingsMenu:
             'scrollbar_hover': (90, 90, 90)
         }
 
-        self.settingmenu_image = pygame.image.load(r'..\assets\MenuPhoto\parametrebueno3.png')
+        image_path2 = os.path.join(current_dir, '..', 'assets', 'MenuPhoto', 'parametrebueno3.png')
+        self.settingmenu_image = pygame.image.load(image_path2)
         self.settingmenu_image = pygame.transform.scale(self.settingmenu_image, (screen_width, screen_height))
         
         # Scroll settings
