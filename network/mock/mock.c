@@ -1,12 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include "cJSON.h"
 
-#define PORT 5000
+#pragma comment(lib, "ws2_32.lib")
+
+#define PORT 12345
 #define BUFFER_SIZE 1024
 
 typedef struct {
@@ -37,42 +38,42 @@ void parse_json(const char *json_str, EventData *event_data) {
 }
 
 int main() {
-    int server_fd, new_socket;
+    WSADATA wsaData;
+    int server_fd;
     struct sockaddr_in address;
     char buffer[BUFFER_SIZE] = {0};
     EventData event_data;
 
-    // Création du socket
-    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
+    // Initialisation de Winsock
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        fprintf(stderr, "Erreur de WSAStartup\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // Création du socket UDP
+    if ((server_fd = socket(AF_INET, SOCK_DGRAM, 0)) == INVALID_SOCKET) {
         perror("Erreur de socket");
+        WSACleanup();
         exit(EXIT_FAILURE);
     }
 
     address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
+    address.sin_addr.s_addr = INADDR_ANY; // Listen on all interfaces
     address.sin_port = htons(PORT);
 
     // Liaison du socket
-    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) == SOCKET_ERROR) {
         perror("Erreur de bind");
+        closesocket(server_fd);
+        WSACleanup();
         exit(EXIT_FAILURE);
     }
 
-    // Écoute des connexions entrantes
-    if (listen(server_fd, 3) < 0) {
-        perror("Erreur de listen");
-        exit(EXIT_FAILURE);
-    }
-
-    printf("Serveur en attente sur le port %d...\n", PORT);
-    if ((new_socket = accept(server_fd, NULL, NULL)) < 0) {
-        perror("Erreur d'accept");
-        exit(EXIT_FAILURE);
-    }
+    printf("Serveur UDP en attente sur le port %d...\n", PORT);
 
     // Réception des événements en boucle
     while (1) {
-        int valread = read(new_socket, buffer, BUFFER_SIZE - 1);
+        int valread = recvfrom(server_fd, buffer, BUFFER_SIZE - 1, 0, NULL, NULL);
         if (valread > 0) {
             buffer[valread] = '\0'; // S'assurer que la chaîne est terminée correctement
             printf("Événement reçu : %s\n", buffer);
@@ -82,9 +83,4 @@ int main() {
             printf("ID: %d, Message: %s\n", event_data.id, event_data.message);
         }
     }
-    close(new_socket);
-    close(server_fd);
-    
-
-    return 0;
 }
