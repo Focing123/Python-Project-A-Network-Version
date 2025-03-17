@@ -287,6 +287,28 @@ class Map:
             pass
         return nearest_drop_point    
 
+    def get_state(self):
+        """
+        Retourne un dictionnaire décrivant l'état de la map, incluant :
+          - La taille (width et height)
+          - La liste des ressources présentes sur le terrain, avec leurs coordonnées, type et quantité
+        """
+        state = {
+            "size": {"width": self.width, "height": self.height},
+            "resources": []
+        }
+        for y in range(self.height):
+            for x in range(self.width):
+                tile = self.grid[y][x]
+                if tile.resource is not None:
+                    resource_state = {
+                        "type": tile.resource.type,
+                        "amount": tile.resource.amount,
+                        "coordinates": (x, y)
+                    }
+                    state["resources"].append(resource_state)
+        return state
+
 class Tile:
     def __init__(self, x, y):
         self.x = x
