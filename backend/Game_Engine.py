@@ -3,6 +3,8 @@ import time
 import pickle
 import os
 import tkinter as tk
+import socket
+import json
 
 from queue import Queue
 from frontend.gui import GUI
@@ -22,11 +24,13 @@ except ImportError:
 from html_report import generate_html_report
 
 from IA import IA
+from network.network_manager import NetworkManager
 
 # GameEngine Class
 class GameEngine:
     def __init__(self, game_mode, map_size, players, sauvegarde=False):
         self.game_mode = game_mode
+        self.network = "multijoueur"
         self.map_size = map_size
         self.players = players
         self.map = Map(*map_size)  # Create a map object
@@ -49,6 +53,9 @@ class GameEngine:
         self.current_time = time.time()
 
         self.terminalon = True
+        
+        # Initialisation du gestionnaire réseau
+        self.network_manager = NetworkManager() if self.network.lower() == "multijoueur" else None
 
         # GUI thread related attributes
         self.gui_running = False
@@ -244,6 +251,10 @@ class GameEngine:
                 if self.gui_running:
                     self.update_gui()
 
+                # Si le jeu est en mode multijoueur, envoyer périodiquement l'état
+                if self.network.lower() == "multijoueur" and self.turn % 500 == 0:
+                    self.send_multiplayer_state()
+
                 self.turn += 1
 
             active_players = [p for p in self.players if p.units or p.buildings]
@@ -337,3 +348,13 @@ class GameEngine:
             self.debug_print(f"Game loaded from {filename}.")
         except Exception as e:
             self.debug_print(f"Error loading game: {e}")
+
+    def send_multiplayer_state(self):
+        """Envoie l'état du jeu via le gestionnaire réseau"""
+        if self.network_manager:
+            self.network_manager.send_game_state(self)
+
+    def __del__(self):
+        """Destructeur pour fermer proprement les connexions"""
+        if self.network_manager:
+            self.network_manager.close()
