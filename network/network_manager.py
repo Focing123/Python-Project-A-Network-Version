@@ -1,5 +1,4 @@
 import socket
-from backend.logger import debug_print
 
 class NetworkManager:
     def __init__(self):
@@ -10,7 +9,6 @@ class NetworkManager:
     def _serialize_state(self, state_dict):
         """Convertit un dictionnaire en chaîne de caractères"""
         parts = []
-        parts.append(f"turn={state_dict['turn']}")
         parts.append(f"map={state_dict['map']}")
         
         for player in state_dict['players']:
@@ -50,9 +48,9 @@ class NetworkManager:
         payload = self._serialize_state(state)
         try:
             self.udp_socket.sendto(payload.encode("utf-8"), self.broadcast_address)
-            debug_print("Etat multijoueur envoyé via UDP.")
+            print("Etat multijoueur envoyé via UDP.")
         except Exception as e:
-            debug_print(f"Erreur lors de l'envoi UDP: {e}")
+            print(f"Erreur lors de l'envoi UDP: {e}")
 
     def close(self):
         """Ferme la connexion réseau"""
