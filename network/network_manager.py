@@ -1,12 +1,15 @@
 import socket
 import json
+import select
 from backend.logger import debug_print
 
 class NetworkManager:
     def __init__(self):
         self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        self.broadcast_address = ("<broadcast>", 12345)
+        self.broadcast_address = ("<broadcast>", 1234)
+        self.udp_socket.bind(('', 12345))  # Écoute sur toutes les interfaces
+        self.udp_socket.setblocking(False)
 
     def send_game_state(self, game_state):
         """Envoie l'état du jeu via UDP"""
@@ -63,6 +66,54 @@ class NetworkManager:
             debug_print("Etat multijoueur envoyé via UDP.")
         except Exception as e:
             debug_print(f"Erreur lors de l'envoi UDP: {e}")
+
+    def receive_game_state(self, timeout=0.001):
+        """Reçoit l'état du jeu via UDP de manière non bloquante"""
+        ready = select.select([self.udp_socket], [], [], timeout)
+        if ready[0]:
+            try:
+                data, addr = self.udp_socket.recvfrom(65535)
+                state = json.loads(data.decode('utf-8'))
+                debug_print(f"État multijoueur reçu de {addr}")
+                return state
+            except Exception as e:
+                debug_print(f"Erreur lors de la réception UDP: {e}")
+        return None
+
+    def apply_state_to_game(self, game_engine, state):
+        """Applique l'état reçu au moteur de jeu"""
+        if not state:
+            return
+
+        # Mise à jour du tour si plus récent
+        if state["turn"] > game_engine.turn:
+            game_engine.turn = state["turn"]
+
+        # Mise à jour des joueurs
+        for player_state in state["players"]:
+            for player in game_engine.players:
+                if player.name == player_state["name"]:
+                    # Mise à jour des ressources
+                    player.owned_resources = player_state["resources"]
+
+                    # Mise à jour des unités
+                    for unit_state in player_state["units"]:
+                        for unit in player.units:
+                            if unit.position == unit_state["position"]:
+                                unit.hp = unit_state["hp"]
+                                unit.target_position = unit_state["target_position"]
+                                unit.target_attack = unit_state["target_attack"]
+                                unit.is_attacked_by = unit_state["is_attacked_by"]
+                                unit.task = unit_state["task"]
+                                unit.direction = unit_state["direction"]
+                                unit.is_moving = unit_state["is_moving"]
+
+                    # Mise à jour des bâtiments
+                    for building_state in player_state["buildings"]:
+                        for building in player.buildings:
+                            if building.position == building_state["position"]:
+                                building.hp = building_state["hp"]
+                                building.is_attacked = building_state["is_attacked"]
 
     def close(self):
         """Ferme la connexion réseau"""

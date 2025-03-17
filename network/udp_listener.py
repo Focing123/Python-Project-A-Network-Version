@@ -2,7 +2,7 @@ import socket
 import json
 
 def main():
-    udp_port = 12345  # Doit correspondre au port utilisé pour l'envoi
+    udp_port = 1234  # Doit correspondre au port utilisé pour l'envoi
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(('', udp_port))
     print(f"Écoute UDP sur le port {udp_port}...")

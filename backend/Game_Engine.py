@@ -55,12 +55,15 @@ class GameEngine:
         self.terminalon = True
         
         # Initialisation du gestionnaire réseau
-        self.network_manager = NetworkManager() if self.network.lower() == "multijoueur" else None
+        self.network_manager = NetworkManager()
 
         # GUI thread related attributes
         self.gui_running = False
         self.data_queue = Queue()
         self.gui_thread = None
+
+        self.last_state_update = 0
+        self.state_update_interval = 0.1  # 100ms entre les mises à jour
 
     def start_gui_thread(self):
         """Initialize and start the GUI thread"""
@@ -103,6 +106,16 @@ class GameEngine:
                 # Mettre à jour current_time au début de chaque itération si le jeu n'est pas en pause
                 if not self.is_paused:
                     self.current_time = time.time()
+
+                # Réception et application des états réseau
+                if self.network.lower() == "multijoueur":
+                    current_time = time.time()
+                    if current_time - self.last_state_update >= self.state_update_interval:
+                        if self.network_manager:
+                            state = self.network_manager.receive_game_state()
+                            if state:
+                                self.network_manager.apply_state_to_game(self, state)
+                        self.last_state_update = current_time
 
                 # Handle input
                 curses.curs_set(0)  # Hide cursor
@@ -252,7 +265,7 @@ class GameEngine:
                     self.update_gui()
 
                 # Si le jeu est en mode multijoueur, envoyer périodiquement l'état
-                if self.network.lower() == "multijoueur" and self.turn % 500 == 0:
+                if self.network.lower() == "multijoueur" and self.turn % 50 == 0:
                     self.send_multiplayer_state()
 
                 self.turn += 1
