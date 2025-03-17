@@ -1,5 +1,4 @@
 import socket
-import json
 from backend.logger import debug_print
 
 class NetworkManager:
@@ -7,6 +6,22 @@ class NetworkManager:
         self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         self.broadcast_address = ("<broadcast>", 12345)
+
+    def _serialize_state(self, state_dict):
+        """Convertit un dictionnaire en chaîne de caractères"""
+        parts = []
+        parts.append(f"turn={state_dict['turn']}")
+        parts.append(f"map={state_dict['map']}")
+        
+        for player in state_dict['players']:
+            player_str = f"player:name={player['name']}"
+            units_str = ",".join(f"{u['position']}" for u in player['units'])
+            buildings_str = ",".join(f"{b['position']}" for b in player['buildings'])
+            resources_str = ",".join(f"{k}:{v}" for k, v in player['resources'].items())
+            player_str += f"|units={units_str}|buildings={buildings_str}|resources={resources_str}"
+            parts.append(player_str)
+        
+        return "||".join(parts)
 
     def send_game_state(self, game_state):
         """Envoie l'état du jeu via UDP"""
@@ -35,9 +50,9 @@ class NetworkManager:
             "actions": []
         }
 
-        json_payload = json.dumps(state)
+        payload = self._serialize_state(state)
         try:
-            self.udp_socket.sendto(json_payload.encode("utf-8"), self.broadcast_address)
+            self.udp_socket.sendto(payload.encode("utf-8"), self.broadcast_address)
             debug_print("Etat multijoueur envoyé via UDP.")
         except Exception as e:
             debug_print(f"Erreur lors de l'envoi UDP: {e}")
