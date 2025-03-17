@@ -27,12 +27,9 @@ class NetworkManager:
                     "resources": getattr(player, "owned_resources", {})
                 }
             players_state.append(p_state)
-
         state = {
-            "turn": game_state.turn,
             "map": map_state,
             "players": players_state,
-            "actions": []
         }
 
         json_payload = json.dumps(state)
