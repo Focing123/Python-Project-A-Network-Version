@@ -3,6 +3,8 @@ import time
 import pickle
 import os
 import tkinter as tk
+import socket
+import json
 
 from queue import Queue
 from frontend.gui import GUI
@@ -27,6 +29,7 @@ from IA import IA
 class GameEngine:
     def __init__(self, game_mode, map_size, players, sauvegarde=False):
         self.game_mode = game_mode
+        self.network = "multijoueur"
         self.map_size = map_size
         self.players = players
         self.map = Map(*map_size)  # Create a map object
@@ -49,6 +52,11 @@ class GameEngine:
         self.current_time = time.time()
 
         self.terminalon = True
+        
+        # Initialisation du socket UDP pour la diffusion en mode multijoueur
+        self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        self.broadcast_address = ("<broadcast>", 12345)  # Choisissez le port souhaité
 
         # GUI thread related attributes
         self.gui_running = False
@@ -244,6 +252,10 @@ class GameEngine:
                 if self.gui_running:
                     self.update_gui()
 
+                # Si le jeu est en mode multijoueur, envoyer périodiquement l'état
+                if self.network.lower() == "multijoueur" and self.turn % 500 == 0:
+                    self.send_multiplayer_state()
+
                 self.turn += 1
 
             active_players = [p for p in self.players if p.units or p.buildings]
@@ -337,3 +349,45 @@ class GameEngine:
             self.debug_print(f"Game loaded from {filename}.")
         except Exception as e:
             self.debug_print(f"Error loading game: {e}")
+
+    def send_multiplayer_state(self):
+        """
+        Compile et envoie l'état du jeu (map, joueurs et actions) sous forme de JSON via UDP.
+        """
+        # Construction de l'état de la map
+        try:
+            map_state = self.map.get_state()  # Vous pouvez implémenter get_state() dans Map
+        except AttributeError:
+            map_state = "Etat de la map non défini"
+
+        # Construction des états de chaque joueur
+        players_state = []
+        for player in self.players:
+            try:
+                p_state = player.get_state()   # Vous pouvez ajouter une méthode get_state() dans votre classe Player
+            except AttributeError:
+                # Exemple minimal si get_state() n'existe pas
+                p_state = {
+                    "name": getattr(player, "name", "inconnu"),
+                    "units": [{"position": unit.position} for unit in getattr(player, "units", [])],
+                    "buildings": [{"position": b.position} for b in getattr(player, "buildings", [])],
+                    "resources": getattr(player, "owned_resources", {})
+                }
+            players_state.append(p_state)
+
+        # Actions en cours (pour l'instant vide, à compléter selon votre logique)
+        actions_state = []
+        
+        game_state = {
+            "turn": self.turn,
+            "map": map_state,
+            "players": players_state,
+            "actions": actions_state
+        }
+        
+        json_payload = json.dumps(game_state)
+        try:
+            self.udp_socket.sendto(json_payload.encode("utf-8"), self.broadcast_address)
+            self.debug_print("Etat multijoueur envoyé via UDP.")
+        except Exception as e:
+            self.debug_print(f"Erreur lors de l'envoi UDP: {e}")
