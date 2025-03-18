@@ -11,7 +11,7 @@ sys.path.append(project_root)
 from backend.Starter_File import start_menu
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Launch game with or without save and debug mode.")
+    parser = argparse.ArgumentParser(description="Launch game with or without save, debug mode, or online play.")
     parser.add_argument(
         "-s", "--save", 
         type=str, 
@@ -23,6 +23,13 @@ if __name__ == "__main__":
         default=False, 
         help="Enable debug mode (default=False)."
     )
+    parser.add_argument(
+        "-N", "--network",
+        action="store_true",
+        default=False,
+        help="Play online using peer-to-peer UDP requests."
+    )
     args = parser.parse_args()
     config.debug_mode = args.debug
-    start_menu(save_file=args.save)
+    config.network_mode = args.network
+    start_menu(save_file=args.save, network_mode=args.network)

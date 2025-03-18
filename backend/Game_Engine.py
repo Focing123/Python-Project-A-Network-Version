@@ -28,9 +28,9 @@ from network.network_manager import NetworkManager
 
 # GameEngine Class
 class GameEngine:
-    def __init__(self, game_mode, map_size, players, sauvegarde=False):
+    def __init__(self, game_mode, map_size, players, sauvegarde=False, network_mode=False):
         self.game_mode = game_mode
-        self.network = "multijoueur"
+        self.network = network_mode
         self.map_size = map_size
         self.players = players
         self.map = Map(*map_size)  # Create a map object
@@ -108,7 +108,7 @@ class GameEngine:
                     self.current_time = time.time()
 
                 # Réception et application des états réseau
-                if self.network.lower() == "multijoueur":
+                if self.network == True:
                     current_time = time.time()
                     if current_time - self.last_state_update >= self.state_update_interval:
                         if self.network_manager:
@@ -265,7 +265,7 @@ class GameEngine:
                     self.update_gui()
 
                 # Si le jeu est en mode multijoueur, envoyer périodiquement l'état
-                if self.network.lower() == "multijoueur" and self.turn % 50 == 0:
+                if self.network == True and self.turn % 50 == 0:
                     self.send_multiplayer_state()
 
                 self.turn += 1
@@ -283,7 +283,7 @@ class GameEngine:
     def check_victory(self):
         if self.turn % 500 == 0: # Check if the game is over
             active_players = [p for p in self.players if p.units or p.buildings] # Check if the player has units and buildings
-            return len(active_players) == 1 # Check if there is only one player left
+            return len(active_players) == 0 # Check if there is only one player left
         else:
             return False
 

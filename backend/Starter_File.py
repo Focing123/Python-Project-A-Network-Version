@@ -3,7 +3,7 @@ import pygame
 import sys
 import curses
 import os
-from Players import *
+from Players import Player
 
 
 # Game Mode
@@ -313,7 +313,7 @@ class GameSettingsMenu:
         GameMode = self.game_modes[self.current_mode]
         self.map_width = 120
         self.map_height = 120
-        self.num_players = 3
+        self.num_players = 1
         
         # Popup settings
         self.show_mode_popup = False
@@ -542,7 +542,7 @@ class GameSettingsMenu:
                             self.height_input['active'] = False
                         if self.player_input['active']:
                             if self.player_input['text']:
-                                self.num_players = max(2, min(8, int(self.player_input['text'])))
+                                self.num_players = max(1, min(8, int(self.player_input['text'])))
                                 self.player_button['text'] = str(self.num_players)
                             self.player_input['active'] = False
                 
@@ -574,7 +574,7 @@ class GameSettingsMenu:
                     if self.player_input['active']:
                         if event.key == pygame.K_RETURN:
                             if self.player_input['text']:
-                                self.num_players = max(2, min(8, int(self.player_input['text'])))
+                                self.num_players = max(1, min(8, int(self.player_input['text'])))
                                 self.player_button['text'] = str(self.num_players)
                             self.player_input['active'] = False
                         elif event.key == pygame.K_BACKSPACE:
@@ -778,7 +778,7 @@ class PlayerSettingsMenu:
             
             pygame.display.flip()
 
-def start_menu(save_file=None):
+def start_menu(save_file=None, network_mode=False):
     menu = StartMenu()
     action = menu.run()
     
@@ -825,7 +825,8 @@ def start_menu(save_file=None):
                     game_mode=GameMode,
                     map_size=map_size,
                     players=players,
-                    sauvegarde=False
+                    sauvegarde=False,
+                    network_mode=network_mode
                 ).run(stdscr))
             else:
                 # If player settings menu was closed, return to main menu
@@ -842,7 +843,7 @@ def start_menu(save_file=None):
         elif selected_save:  # If a save file was selected
             pygame.quit()
             from Game_Engine import GameEngine
-            curses.wrapper(lambda stdscr: start_game(stdscr, selected_save))
+            curses.wrapper(lambda stdscr: start_game(stdscr, selected_save, network_mode))
         else:  # If window was closed
             pygame.quit()
             sys.exit()
@@ -851,7 +852,7 @@ def start_menu(save_file=None):
         print("Exiting game")
         sys.exit()
 
-def start_game(stdscr, save_file=None):
+def start_game(stdscr, save_file=None, network_mode=False):
     from Game_Engine import GameEngine
     curses.curs_set(0)
     stdscr.clear()
@@ -861,7 +862,8 @@ def start_game(stdscr, save_file=None):
             game_mode=GameMode,
             map_size=map_size,
             players=players,
-            sauvegarde=True
+            sauvegarde=True,
+            network_mode=network_mode
         )
         game_engine.load_game(save_file)
     else:
@@ -869,7 +871,8 @@ def start_game(stdscr, save_file=None):
             game_mode=GameMode,
             map_size=map_size,
             players=players,
-            sauvegarde=False
+            sauvegarde=False,
+            network_mode=network_mode
         )
 
     game_engine.run(stdscr)
