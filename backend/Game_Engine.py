@@ -33,6 +33,13 @@ class GameEngine:
         self.network = network_mode
         self.map_size = map_size
         self.players = players
+        # Initialisation du gestionnaire réseau
+        if self.network:
+            self.network_manager = NetworkManager(peer_to_peer=self.network)
+            self.network_manager.run_peer_discovery()
+        else:
+            self.network_manager = None
+    
         self.map = Map(*map_size)  # Create a map object
         self.turn = 0
         self.is_paused = False  # Flag to track if the game is paused
@@ -54,8 +61,7 @@ class GameEngine:
 
         self.terminalon = True
         
-        # Initialisation du gestionnaire réseau
-        self.network_manager = NetworkManager()
+        
 
         # GUI thread related attributes
         self.gui_running = False
@@ -100,12 +106,16 @@ class GameEngine:
         
         if self.terminalon :
             self.map.display_viewport(stdscr, top_left_x, top_left_y, viewport_width, viewport_height, Map_is_paused=self.is_paused)  # Display the initial viewport
-
+        
         try:
             while not self.check_victory():
                 # Mettre à jour current_time au début de chaque itération si le jeu n'est pas en pause
                 if not self.is_paused:
                     self.current_time = time.time()
+
+                # In your game loop, add this at the beginning or right after processing events
+                if self.network == True and self.network_manager:
+                    self.network_manager.update()  # Call the new update method frequently
 
                 # Réception et application des états réseau
                 if self.network == True:
@@ -265,7 +275,7 @@ class GameEngine:
                     self.update_gui()
 
                 # Si le jeu est en mode multijoueur, envoyer périodiquement l'état
-                if self.network == True and self.turn % 50 == 0:
+                if self.network == True and self.turn % 200 == 0:
                     self.send_multiplayer_state()
 
                 self.turn += 1
@@ -365,7 +375,10 @@ class GameEngine:
     def send_multiplayer_state(self):
         """Envoie l'état du jeu via le gestionnaire réseau"""
         if self.network_manager:
+            # No need to check peer_table length since the sender will ignore its own messages
             self.network_manager.send_game_state(self)
+            # This is now handled by update() method, so not strictly necessary here
+            # self.network_manager.handle_incoming_discovery()
 
     def __del__(self):
         """Destructeur pour fermer proprement les connexions"""
