@@ -15,7 +15,7 @@
     #define close_socket close
 #endif
 
-#define LISTEN_PORT 12346   // Port d'écoute des événements entrants
+#define LISTEN_PORT 1234   // Port d'écoute des événements entrants
 #define FORWARD_PORT 12345  // Port où on envoie les événements
 #define BUFFER_SIZE 65535   // Taille max d'un paquet UDP
 #define BROADCAST_IP "255.255.255.255" // Adresse de broadcast
@@ -60,7 +60,7 @@ int main() {
 
     // Activation du mode broadcast
     int broadcastEnable = 1;
-    if (setsockopt(sock_listen, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable)) < 0) {
+    if (setsockopt(sock_listen, SOL_SOCKET, SO_BROADCAST, (const char*) &broadcastEnable, sizeof(broadcastEnable)) < 0) {
         perror("Erreur activation broadcast");
         close_socket(sock_listen);
         cleanup_socket_library();
@@ -86,7 +86,7 @@ int main() {
     forward_addr.sin_addr.s_addr = inet_addr(BROADCAST_IP);
 
     int opt = 1;
-    setsockopt(sock_listen, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    setsockopt(sock_listen, SOL_SOCKET, SO_REUSEADDR, (const char*) &opt, sizeof(opt));
     // Lier le socket d'écoute
     if (bind(sock_listen, (struct sockaddr *)&local_addr, sizeof(local_addr)) < 0) {
         perror("Échec du bind (écoute)");
@@ -113,10 +113,11 @@ int main() {
     while (1) {
         struct sockaddr_in sender_addr;
         int recv_len;
-
+        
         // Écoute des événements entrants
         recv_len = recvfrom(sock_listen, buffer, BUFFER_SIZE - 1, 0, 
                             (struct sockaddr *)&sender_addr, &addr_len);
+        printf("%i \n", recv_len);
         if (recv_len > 0) {
             buffer[recv_len] = '\0';
             printf("Reçu de %s:%d (%d bytes)\n", 
