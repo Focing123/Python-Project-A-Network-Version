@@ -9,7 +9,7 @@
 #include <signal.h>
 #include <poll.h>
 
-#define PORT_ENTREE 12347
+#define PORT_ENTREE 1234
 #define PORT_BROADCAST 12346
 #define BROADCAST_IP "255.255.255.255"
 #define BUFFER_SIZE 1024
