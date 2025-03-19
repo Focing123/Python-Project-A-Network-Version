@@ -33,7 +33,33 @@ class GameEngine:
         self.network = network_mode
         self.map_size = map_size
         self.players = players
-        self.map = Map(*map_size)  # Create a map object
+        # Initialisation du gestionnaire réseau
+        if self.network:
+            self.network_manager = NetworkManager(peer_to_peer=self.network)
+            self.network_manager.run_peer_discovery()
+        else:
+            self.network_manager = None
+
+        # Initialize map based on network role
+        if not self.network or (self.network and self.network_manager.peer_id == 1):
+            self.map = Map(*map_size)  
+        else:
+            # Wait for initial map state from server
+            self.map = None
+            while not self.map :
+                if self.network_manager:
+                    state = self.network_manager.receive_game_state()
+                    if state and 'map' in state:
+                        if state and 'map' in state and state['map'] and (state['width'] and state['height']):
+                            self.map = Map(state['width'],state['height'])
+                            self.map.initialize_from_state(state['map'])
+                        else:
+                            raise ValueError("Invalid map state received from server")
+                        break
+            
+            if not self.map:
+                raise Exception("Failed to receive initial map state from server")
+
         self.turn = 0
         self.is_paused = False  # Flag to track if the game is paused
         self.changed_tiles = set()  # Set to track changed tiles
@@ -45,7 +71,7 @@ class GameEngine:
         self.IA_used = False
 
         # Sauvegarde related attributes
-        if not sauvegarde:
+        if not sauvegarde :
             Building.place_starting_buildings(self.map)   # Place starting town centers on the map
             Unit.place_starting_units(self.players, self.map)  # Place starting units on the map
         
@@ -54,8 +80,7 @@ class GameEngine:
 
         self.terminalon = True
         
-        # Initialisation du gestionnaire réseau
-        self.network_manager = NetworkManager()
+        
 
         # GUI thread related attributes
         self.gui_running = False
@@ -100,12 +125,16 @@ class GameEngine:
         
         if self.terminalon :
             self.map.display_viewport(stdscr, top_left_x, top_left_y, viewport_width, viewport_height, Map_is_paused=self.is_paused)  # Display the initial viewport
-
+        
         try:
             while not self.check_victory():
                 # Mettre à jour current_time au début de chaque itération si le jeu n'est pas en pause
                 if not self.is_paused:
                     self.current_time = time.time()
+
+                # In your game loop, add this at the beginning or right after processing events
+                if self.network == True and self.network_manager:
+                    self.network_manager.update()  # Call the new update method frequently
 
                 # Réception et application des états réseau
                 if self.network == True:
@@ -113,8 +142,8 @@ class GameEngine:
                     if current_time - self.last_state_update >= self.state_update_interval:
                         if self.network_manager:
                             state = self.network_manager.receive_game_state()
-                            if state:
-                                self.network_manager.apply_state_to_game(self, state)
+                            #if state:
+                            #   self.network_manager.apply_state_to_game(self, state)
                         self.last_state_update = current_time
 
                 # Handle input
@@ -265,13 +294,16 @@ class GameEngine:
                     self.update_gui()
 
                 # Si le jeu est en mode multijoueur, envoyer périodiquement l'état
-                if self.network == True and self.turn % 50 == 0:
+                if self.network == True and self.turn % 200 == 0:
                     self.send_multiplayer_state()
 
                 self.turn += 1
 
             active_players = [p for p in self.players if p.units or p.buildings]
-            self.debug_print(f"Player {active_players[0].name} wins the game!", 'Magenta')
+            if active_players:
+                self.debug_print(f"Player {active_players[0].name} wins the game!", 'Magenta')
+            else:
+                self.debug_print("No players left. Game over!", 'Magenta')
             input("Press Enter to exit...")
 
         except KeyboardInterrupt:
@@ -365,7 +397,10 @@ class GameEngine:
     def send_multiplayer_state(self):
         """Envoie l'état du jeu via le gestionnaire réseau"""
         if self.network_manager:
+            # No need to check peer_table length since the sender will ignore its own messages
             self.network_manager.send_game_state(self)
+            # This is now handled by update() method, so not strictly necessary here
+            # self.network_manager.handle_incoming_discovery()
 
     def __del__(self):
         """Destructeur pour fermer proprement les connexions"""

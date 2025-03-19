@@ -9,19 +9,18 @@ class NetworkManager:
         self.peer_to_peer = peer_to_peer
         self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        self.udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.broadcast_address = ("255.255.255.255", 1234)
-        self.udp_socket.bind(('', 12345))
+        self.udp_socket.bind(('', 0)) # Bind to any available port
         self.udp_socket.setblocking(False)
         # Attributs pour le mode peer-to-peer
         self.peer_id = None
         self.is_server = False
         self.peer_table = {}  # Ex: { "('192.168.1.100', 12345)": 1, ... }
+        self.last_discovery_broadcast = 0
 
     def run_peer_discovery(self, timeout=5):
-        """Lance la découverte des pairs.
-        Envoie une requête de découverte. Si aucune réponse n'est reçue dans le délai,
-        l'instance s'identifie en tant que serveur (ID = 1). Sinon, elle récupère son ID et
-        la table des pairs depuis le serveur."""
+        """Lance la découverte des pairs."""
         if not self.peer_to_peer:
             return
 
@@ -44,13 +43,58 @@ class NetworkManager:
                         break
                 except Exception as e:
                     debug_print(f"Erreur lors de la découverte des pairs: {e}")
+
         if not response_received:
-            # Aucune réponse : on devient le serveur
+            # Aucune réponse : rebind du socket sur le port 1234 et déclaration en tant que serveur.
+            self.udp_socket.close()
+            self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            self.udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                self.udp_socket.bind(('', 1234))  # Le serveur écoute sur le port 1234
+            except Exception as e:
+                debug_print(f"Erreur lors du bind sur le port 1234 : {e}")
+                return False  # Signal que l'initialisation en tant que serveur a échoué
+            self.udp_socket.setblocking(False)
             self.peer_id = 1
             self.is_server = True
             # Ajoute soi-même dans la table
-            self.peer_table[str(self.udp_socket.getsockname())] = self.peer_id
+            local_addr = socket.gethostbyname(socket.gethostname())
+            self.peer_table[f"('{local_addr}', 1234)"] = self.peer_id
             debug_print("Aucun serveur trouvé. Démarrage en tant que serveur avec ID 1.")
+        
+        return True
+
+    def update(self):
+        """Méthode principale à appeler dans la boucle principale du jeu pour gérer le réseau"""
+        if not self.peer_to_peer:
+            return
+            
+        # Si serveur, gérer les demandes de découverte
+        if self.is_server:
+            self.handle_incoming_discovery()
+        
+        # Tous les 10 secondes, renvoyer une annonce de découverte si serveur
+        # ou vérifier si le serveur est toujours disponible si client
+        current_time = time.time()
+        if current_time - self.last_discovery_broadcast > 10:
+            self.last_discovery_broadcast = current_time
+            if self.is_server:
+                # Annoncer sa présence
+                announcement = {
+                    "type": "server_announcement",
+                    "peer_table": self.peer_table
+                }
+                self.udp_socket.sendto(json.dumps(announcement).encode("utf-8"), self.broadcast_address)
+                debug_print("Annonce serveur envoyée")
+            else:
+                # Envoyer un ping au serveur
+                ping = {
+                    "type": "ping",
+                    "peer_id": self.peer_id
+                }
+                self.udp_socket.sendto(json.dumps(ping).encode("utf-8"), self.broadcast_address)
+                debug_print(f"Ping envoyé au serveur, ID: {self.peer_id}")
 
     def handle_incoming_discovery(self):
         """Méthode destinée à être appelée en boucle par le serveur pour traiter
@@ -60,10 +104,14 @@ class NetworkManager:
             try:
                 data, addr = self.udp_socket.recvfrom(65535)
                 message = json.loads(data.decode("utf-8"))
+                
+                # Traitement des demandes de découverte
                 if message.get("type") == "discovery_request" and self.is_server:
                     # Attribue un nouvel ID en incrémentant le max actuel
                     new_id = max(self.peer_table.values()) + 1 if self.peer_table else 1
-                    self.peer_table[str(addr)] = new_id
+                    addr_str = str(addr)
+                    self.peer_table[addr_str] = new_id
+                    
                     response = {
                         "type": "discovery_response",
                         "assigned_id": new_id,
@@ -71,11 +119,31 @@ class NetworkManager:
                     }
                     self.udp_socket.sendto(json.dumps(response).encode("utf-8"), addr)
                     debug_print(f"Nouvelle instance connectée avec ID {new_id} depuis {addr}.")
+                    
+                # Traitement des pings
+                elif message.get("type") == "ping" and self.is_server:
+                    peer_id = message.get("peer_id")
+                    # Vérifier si ce peer existe dans notre table
+                    if peer_id in self.peer_table.values():
+                        pong = {
+                            "type": "pong",
+                            "peer_table": self.peer_table
+                        }
+                        self.udp_socket.sendto(json.dumps(pong).encode("utf-8"), addr)
+                        debug_print(f"Pong envoyé à peer ID {peer_id}")
+                
+                # Réception d'une annonce serveur ou d'un pong
+                elif (message.get("type") == "server_announcement" or 
+                      message.get("type") == "pong") and not self.is_server:
+                    # Mise à jour de la table des pairs
+                    self.peer_table = message.get("peer_table", {})
+                    debug_print(f"Table des pairs mise à jour: {self.peer_table}")
+                    
             except Exception as e:
                 debug_print(f"Erreur lors du traitement de la découverte: {e}")
 
     def send_game_state(self, game_state):
-        """Envoie l'état du jeu via UDP"""
+        """Envoie l'état du jeu via UDP en tenant compte des ports dans la table des pairs"""
         try:
             map_state = game_state.map.get_state()
         except AttributeError:
@@ -117,27 +185,46 @@ class NetworkManager:
             players_state.append(p_state)
 
         state = {
-            "nature": "data",
+            "type": "game_data",
+            "sender_id": self.peer_id,
             "map": map_state,
+            "width": game_state.map.width,
+            "height": game_state.map.height,
             "players": players_state,
             "actions": []
         }
         json_payload = json.dumps(state)
         try:
-            self.udp_socket.sendto(json_payload.encode("utf-8"), self.broadcast_address)
-            debug_print("Etat multijoueur envoyé via UDP.")
+            for peer_addr, peer_id in self.peer_table.items():
+                if peer_id != self.peer_id:
+                    addr_tuple = eval(peer_addr)
+                    self.udp_socket.sendto(json_payload.encode("utf-8"), addr_tuple)
+                    debug_print(f"Etat multijoueur envoyé à {addr_tuple} (peer ID: {peer_id}).")
         except Exception as e:
             debug_print(f"Erreur lors de l'envoi UDP: {e}")
 
     def receive_game_state(self, timeout=0.001):
-        """Reçoit l'état du jeu via UDP de manière non bloquante"""
+        """Reçoit l'état du jeu via UDP en tenant compte des ports dans la table des pairs"""
         ready = select.select([self.udp_socket], [], [], timeout)
         if ready[0]:
             try:
                 data, addr = self.udp_socket.recvfrom(65535)
-                state = json.loads(data.decode('utf-8'))
-                debug_print(f"État multijoueur reçu de {addr}")
-                return state
+                payload = json.loads(data.decode('utf-8'))
+                
+                # Traiter uniquement les messages de type game_data
+                if payload.get("type") == "game_data":
+                    sender_id = payload.get("sender_id")
+                    # Ne pas traiter ses propres messages
+                    if sender_id != self.peer_id:
+                        debug_print(f"État multijoueur reçu de {addr} (peer ID: {sender_id})")
+                        return payload
+                # Les autres types de messages sont traités par handle_incoming_discovery
+                elif payload.get("type") in ["discovery_request", "discovery_response", 
+                                            "server_announcement", "ping", "pong"]:
+                    # Appeler handle_incoming_discovery pour traiter ces messages
+                    self.handle_incoming_discovery()
+                    return None
+                
             except Exception as e:
                 debug_print(f"Erreur lors de la réception UDP: {e}")
         return None
