@@ -143,7 +143,7 @@ class NetworkManager:
                 debug_print(f"Erreur lors du traitement de la découverte: {e}")
 
     def send_game_state(self, game_state):
-        """Envoie l'état du jeu via UDP"""
+        """Envoie l'état du jeu via UDP en tenant compte des ports dans la table des pairs"""
         try:
             map_state = game_state.map.get_state()
         except AttributeError:
@@ -185,21 +185,26 @@ class NetworkManager:
             players_state.append(p_state)
 
         state = {
-            "type": "game_data",  # Changed from "data" to be more specific
-            "sender_id": self.peer_id,  # Added sender ID
+            "type": "game_data",
+            "sender_id": self.peer_id,
             "map": map_state,
+            "width": game_state.map.width,
+            "height": game_state.map.height,
             "players": players_state,
             "actions": []
         }
         json_payload = json.dumps(state)
         try:
-            self.udp_socket.sendto(json_payload.encode("utf-8"), self.broadcast_address)
-            debug_print(f"Etat multijoueur envoyé via UDP (peer ID: {self.peer_id}).")
+            for peer_addr, peer_id in self.peer_table.items():
+                if peer_id != self.peer_id:
+                    addr_tuple = eval(peer_addr)
+                    self.udp_socket.sendto(json_payload.encode("utf-8"), addr_tuple)
+                    debug_print(f"Etat multijoueur envoyé à {addr_tuple} (peer ID: {peer_id}).")
         except Exception as e:
             debug_print(f"Erreur lors de l'envoi UDP: {e}")
 
     def receive_game_state(self, timeout=0.001):
-        """Reçoit l'état du jeu via UDP de manière non bloquante"""
+        """Reçoit l'état du jeu via UDP en tenant compte des ports dans la table des pairs"""
         ready = select.select([self.udp_socket], [], [], timeout)
         if ready[0]:
             try:
@@ -211,7 +216,7 @@ class NetworkManager:
                     sender_id = payload.get("sender_id")
                     # Ne pas traiter ses propres messages
                     if sender_id != self.peer_id:
-                        debug_print(f"État multijoueur reçu de peer ID {sender_id}")
+                        debug_print(f"État multijoueur reçu de {addr} (peer ID: {sender_id})")
                         return payload
                 # Les autres types de messages sont traités par handle_incoming_discovery
                 elif payload.get("type") in ["discovery_request", "discovery_response", 
