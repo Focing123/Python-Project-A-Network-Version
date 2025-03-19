@@ -3,6 +3,7 @@ import json
 import select
 import time
 from backend.logger import debug_print
+from frontend.Terrain import Gold, Wood  # Assurez-vous que le chemin d'import est correct
 
 class NetworkManager:
     def __init__(self, peer_to_peer=False):
@@ -11,14 +12,38 @@ class NetworkManager:
         self.udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         self.udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.broadcast_address = ("255.255.255.255", 1234)
-        self.udp_socket.bind(('', 0)) # Bind to any available port
+        # Bind to any available port
+        self.udp_socket.bind(('', 0))
         self.udp_socket.setblocking(False)
-        # Attributs pour le mode peer-to-peer
-        self.peer_id = None
+        # Stocke l'adresse locale (IP, port)
+        self.local_addr = self.udp_socket.getsockname()
+        # Pour identifier les pairs uniquement par leur adresse (IP, port)
+        self.peers = set()
+        # Indique si l'instance fonctionne en mode serveur (c'est-à-dire si le socket est bind sur le port 1234)
         self.is_server = False
-        self.peer_table = {}  # Ex: { "('192.168.1.100', 12345)": 1, ... }
-        self.last_discovery_broadcast = 0
+        # Optionnel : adresse du serveur détecté (pour les clients)
+        self.server_address = None
+        # Référence à la map locale (à affecter depuis GameEngine)
+        self.local_map = None
 
+
+    def validate_peers(self):
+        """Valide les pairs existants et supprime ceux qui ne sont plus valides."""
+        invalid_peers = set()
+        for peer in self.peers:
+            if peer != self.local_addr:
+                try:
+                    # Envoyer un message ping pour vérifier si le pair est toujours accessible
+                    ping_message = json.dumps({"type": "ping"})
+                    self.udp_socket.sendto(ping_message.encode("utf-8"), peer)
+                except socket.error:
+                    invalid_peers.add(peer)
+        
+        # Supprimer les pairs invalides
+        for invalid_peer in invalid_peers:
+            self.peers.remove(invalid_peer)
+            debug_print(f"Pair supprimé (validation): {invalid_peer}")
+            
     def run_peer_discovery(self, timeout=5):
         """Lance la découverte des pairs."""
         if not self.peer_to_peer:
@@ -36,11 +61,18 @@ class NetworkManager:
                     data, addr = self.udp_socket.recvfrom(65535)
                     message = json.loads(data.decode("utf-8"))
                     if message.get("type") == "discovery_response":
-                        self.peer_id = message.get("assigned_id")
-                        self.peer_table = message.get("peer_table", {})
-                        response_received = True
-                        debug_print(f"Serveur détecté. ID attribué: {self.peer_id}")
-                        break
+                        # Vérifier que l'adresse est valide avant de l'ajouter
+                        if addr[0] != '' and addr[1] != 0:
+                            # Pour le client, on stocke l'adresse du serveur
+                            self.server_address = addr
+                            # On traite la liste des pairs reçue
+                            peers = message.get("peers", [])
+                            for p in peers:
+                                if isinstance(p, list) and len(p) == 2 and p[0] != '' and p[1] != 0:
+                                    self.peers.add(tuple(p))
+                            response_received = True
+                            debug_print(f"Serveur détecté depuis {addr}.")
+                            break
                 except Exception as e:
                     debug_print(f"Erreur lors de la découverte des pairs: {e}")
 
@@ -54,96 +86,52 @@ class NetworkManager:
                 self.udp_socket.bind(('', 1234))  # Le serveur écoute sur le port 1234
             except Exception as e:
                 debug_print(f"Erreur lors du bind sur le port 1234 : {e}")
-                return False  # Signal que l'initialisation en tant que serveur a échoué
+                return False  # Échec de l'initialisation en tant que serveur
             self.udp_socket.setblocking(False)
-            self.peer_id = 1
             self.is_server = True
-            # Ajoute soi-même dans la table
-            local_addr = socket.gethostbyname(socket.gethostname())
-            self.peer_table[f"('{local_addr}', 1234)"] = self.peer_id
-            debug_print("Aucun serveur trouvé. Démarrage en tant que serveur avec ID 1.")
+            # Met à jour l'adresse locale après le rebind
+            self.local_addr = self.udp_socket.getsockname()
+            # Vérifie que l'adresse locale est valide avant de l'ajouter
+            if self.local_addr[0] != '' and self.local_addr[1] != 0:
+                # Ajoute soi-même dans la liste de pairs
+                self.peers.add(self.local_addr)
+                debug_print(f"Aucun serveur trouvé. Démarrage en tant que serveur sur {self.local_addr}.")
+            else:
+                debug_print("Adresse locale invalide, impossible de démarrer en tant que serveur.")
+                return False
         
         return True
 
-    def update(self):
-        """Méthode principale à appeler dans la boucle principale du jeu pour gérer le réseau"""
-        if not self.peer_to_peer:
-            return
-            
-        # Si serveur, gérer les demandes de découverte
-        if self.is_server:
-            self.handle_incoming_discovery()
-        
-        # Tous les 10 secondes, renvoyer une annonce de découverte si serveur
-        # ou vérifier si le serveur est toujours disponible si client
-        current_time = time.time()
-        if current_time - self.last_discovery_broadcast > 10:
-            self.last_discovery_broadcast = current_time
-            if self.is_server:
-                # Annoncer sa présence
-                announcement = {
-                    "type": "server_announcement",
-                    "peer_table": self.peer_table
-                }
-                self.udp_socket.sendto(json.dumps(announcement).encode("utf-8"), self.broadcast_address)
-                debug_print("Annonce serveur envoyée")
-            else:
-                # Envoyer un ping au serveur
-                ping = {
-                    "type": "ping",
-                    "peer_id": self.peer_id
-                }
-                self.udp_socket.sendto(json.dumps(ping).encode("utf-8"), self.broadcast_address)
-                debug_print(f"Ping envoyé au serveur, ID: {self.peer_id}")
-
     def handle_incoming_discovery(self):
-        """Méthode destinée à être appelée en boucle par le serveur pour traiter
-        les demandes de découverte entrantes."""
+        """Traite en boucle les demandes de découverte entrantes (pour le serveur)."""
         ready = select.select([self.udp_socket], [], [], 0)
         if ready[0]:
             try:
                 data, addr = self.udp_socket.recvfrom(65535)
                 message = json.loads(data.decode("utf-8"))
                 
-                # Traitement des demandes de découverte
                 if message.get("type") == "discovery_request" and self.is_server:
-                    # Attribue un nouvel ID en incrémentant le max actuel
-                    new_id = max(self.peer_table.values()) + 1 if self.peer_table else 1
-                    addr_str = str(addr)
-                    self.peer_table[addr_str] = new_id
-                    
-                    response = {
-                        "type": "discovery_response",
-                        "assigned_id": new_id,
-                        "peer_table": self.peer_table
-                    }
-                    self.udp_socket.sendto(json.dumps(response).encode("utf-8"), addr)
-                    debug_print(f"Nouvelle instance connectée avec ID {new_id} depuis {addr}.")
-                    
-                # Traitement des pings
-                elif message.get("type") == "ping" and self.is_server:
-                    peer_id = message.get("peer_id")
-                    # Vérifier si ce peer existe dans notre table
-                    if peer_id in self.peer_table.values():
-                        pong = {
-                            "type": "pong",
-                            "peer_table": self.peer_table
+                    # Ajoute le pair à la liste, mais vérifie s'il est valide
+                    if addr[0] != '':  # Vérifier que l'adresse IP n'est pas vide
+                        self.peers.add(addr)
+                        response = {
+                            "type": "discovery_response",
+                            "peers": [list(peer) for peer in self.peers if peer[0] != '']
                         }
-                        self.udp_socket.sendto(json.dumps(pong).encode("utf-8"), addr)
-                        debug_print(f"Pong envoyé à peer ID {peer_id}")
-                
-                # Réception d'une annonce serveur ou d'un pong
-                elif (message.get("type") == "server_announcement" or 
-                      message.get("type") == "pong") and not self.is_server:
-                    # Mise à jour de la table des pairs
-                    self.peer_table = message.get("peer_table", {})
-                    debug_print(f"Table des pairs mise à jour: {self.peer_table}")
+                        self.udp_socket.sendto(json.dumps(response).encode("utf-8"), addr)
+                        debug_print(f"Réponse envoyée à la demande de découverte de {addr}.")
+                    
+                elif message.get("type") == ["server_announcement"] and not self.is_server:
+                    peers = message.get("peers", [])
+                    for p in peers:
+                        self.peers.add(tuple(p))
+                    debug_print(f"Mise à jour des pairs: {self.peers}")
                     
             except Exception as e:
                 debug_print(f"Erreur lors du traitement de la découverte: {e}")
 
-    def send_game_state(self, game_state):
-        """Envoie l'état du jeu via UDP en tenant compte des ports dans la table des pairs"""
+    def send_game_state(self, game_state, nature='data'):
+        """Envoie l'état du jeu via UDP en utilisant la liste des pairs."""
         try:
             map_state = game_state.map.get_state()
         except AttributeError:
@@ -184,79 +172,98 @@ class NetworkManager:
                 }
             players_state.append(p_state)
 
-        state = {
-            "type": "game_data",
-            "sender_id": self.peer_id,
-            "map": map_state,
-            "width": game_state.map.width,
-            "height": game_state.map.height,
-            "players": players_state,
-            "actions": []
-        }
+        if nature == 'data':
+            state = {
+                "type": "game_data",
+                "map": map_state,
+                "width": game_state.map.width,
+                "height": game_state.map.height,
+            }
+        elif nature == 'discovery':
+                state = {
+                "type": "game_data",
+                "map": map_state,
+                "players": players_state,
+                "actions": []
+            }
         json_payload = json.dumps(state)
-        try:
-            for peer_addr, peer_id in self.peer_table.items():
-                if peer_id != self.peer_id:
-                    addr_tuple = eval(peer_addr)
-                    self.udp_socket.sendto(json_payload.encode("utf-8"), addr_tuple)
-                    debug_print(f"Etat multijoueur envoyé à {addr_tuple} (peer ID: {peer_id}).")
-        except Exception as e:
-            debug_print(f"Erreur lors de l'envoi UDP: {e}")
+        invalid_peers = set()
+        
+        # Envoi vers tous les pairs connus sauf soi-même
+        for peer in self.peers:
+            if peer != self.local_addr:
+                try:
+                    self.udp_socket.sendto(json_payload.encode("utf-8"), peer)
+                    debug_print(f"Etat multijoueur envoyé à {peer}.")
+                except socket.error as e:
+                    debug_print(f"Erreur lors de l'envoi UDP à {peer}: {e}")
+                    if e.errno == 10049:  # Si c'est une erreur d'adresse invalide
+                        invalid_peers.add(peer)
+        
+        # Supprimer les pairs invalides
+        for invalid_peer in invalid_peers:
+            self.peers.remove(invalid_peer)
+            debug_print(f"Pair supprimé: {invalid_peer}")
 
     def receive_game_state(self, timeout=0.001):
-        """Reçoit l'état du jeu via UDP en tenant compte des ports dans la table des pairs"""
-        ready = select.select([self.udp_socket], [], [], timeout)
-        if ready[0]:
-            try:
-                data, addr = self.udp_socket.recvfrom(65535)
-                payload = json.loads(data.decode('utf-8'))
-                
-                # Traiter uniquement les messages de type game_data
-                if payload.get("type") == "game_data":
-                    sender_id = payload.get("sender_id")
-                    # Ne pas traiter ses propres messages
-                    if sender_id != self.peer_id:
-                        debug_print(f"État multijoueur reçu de {addr} (peer ID: {sender_id})")
+        """Reçoit l'état du jeu via UDP, applique les changements de ressources sur la map locale et retourne le payload."""
+        try:
+            ready = select.select([self.udp_socket], [], [], timeout)
+            if ready[0]:
+                try:
+                    # Utilisez 65507 pour la taille de buffer (charge utile max UDP)
+                    data, addr = self.udp_socket.recvfrom(65507)
+                    payload = json.loads(data.decode('utf-8'))
+                    
+                    if payload.get("type") == "game_data":
+                        # Ignore le message si il provient de soi-même
+                        if addr != self.local_addr:
+                            debug_print(f"État multijoueur reçu de {addr}.")
+                            # Appliquer les changements de ressources dans la map locale
+                            self.apply_state_to_game(payload)
                         return payload
-                # Les autres types de messages sont traités par handle_incoming_discovery
-                elif payload.get("type") in ["discovery_request", "discovery_response", 
-                                            "server_announcement", "ping", "pong"]:
-                    # Appeler handle_incoming_discovery pour traiter ces messages
-                    self.handle_incoming_discovery()
-                    return None
-                
-            except Exception as e:
-                debug_print(f"Erreur lors de la réception UDP: {e}")
-        return None
+                    elif payload.get("type") in ["discovery_request", "discovery_response", "server_announcement"]:
+                        self.handle_incoming_discovery()
+                        return None
+                except Exception as e:
+                    debug_print(f"Erreur lors de la réception UDP: {e}")
+            return None
+        except Exception as e:
+            debug_print(f"Erreur dans receive_game_state: {e}")
+            return None
 
-    def apply_state_to_game(self, game_engine, state):
-        """Applique l'état reçu au moteur de jeu"""
-        if not state:
-            return
+    def apply_state_to_game(self, payload):
+        """Pour chaque ressource reçue dans le payload, si elle n'existe pas dans la map locale,
+        on l'ajoute dans self.local_map.resources et on met à jour la case correspondante de la grille.
+        La map locale possède une structure : {"Gold": [], "Wood": []}."""
+        map_state = payload.get("map", {})
+        if "resources" in map_state and self.local_map is not None:
+            remote_resources = map_state["resources"]
+            if not isinstance(remote_resources, list):
+                debug_print("Structure des resources invalide, attendu une liste.")
+                return
+            for resource in remote_resources:
+                res_type = resource.get("type")
+                x, y = resource.get("coordinates", (None, None))
+                amount = resource.get("amount")
 
-        if "turn" in state and state["turn"] > game_engine.turn:
-            game_engine.turn = state["turn"]
-
-        for player_state in state.get("players", []):
-            for player in game_engine.players:
-                if player.name == player_state["name"]:
-                    player.owned_resources = player_state["resources"]
-                    for unit_state in player_state["units"]:
-                        for unit in player.units:
-                            if unit.position == unit_state["position"]:
-                                unit.hp = unit_state["hp"]
-                                unit.target_position = unit_state["target_position"]
-                                unit.target_attack = unit_state["target_attack"]
-                                unit.is_attacked_by = unit_state["is_attacked_by"]
-                                unit.task = unit_state["task"]
-                                unit.direction = unit_state["direction"]
-                                unit.is_moving = unit_state["is_moving"]
-                    for building_state in player_state["buildings"]:
-                        for building in player.buildings:
-                            if building.position == building_state["position"]:
-                                building.hp = building_state["hp"]
-                                building.is_attacked = building_state["is_attacked"]
+                if res_type and x is not None and y is not None:
+                    if res_type not in self.local_map.resources:
+                        self.local_map.resources[res_type] = []
+                    if (x, y) not in self.local_map.resources[res_type]:
+                        self.local_map.resources[res_type].append((x, y))
+                        debug_print(f"Nouvelle resource ajoutée de type {res_type} à ({x}, {y}) avec quantité {amount}.")
+                        if y < len(self.local_map.grid) and x < len(self.local_map.grid[y]):
+                            if res_type == "Gold":
+                                resource_obj = Gold()
+                            elif res_type == "Wood":
+                                resource_obj = Wood()
+                            else:
+                                resource_obj = None
+                            if resource_obj is not None:
+                                resource_obj.amount = amount
+                                self.local_map.grid[y][x].resource = resource_obj
 
     def close(self):
-        """Ferme la connexion réseau"""
+        """Ferme la connexion réseau."""
         self.udp_socket.close()

@@ -8,7 +8,7 @@ def main():
     print(f"Écoute UDP sur le port {udp_port}...")
 
     while True:
-        data, addr = sock.recvfrom(65535)  # Taille maximale des données
+        data, addr = sock.recvfrom(65507)  # 65535 est la taille maximale d'un datagramme UDP
         try:
             game_state = json.loads(data.decode('utf-8'))
             print(f"\nÉtat reçu de {addr}:")
