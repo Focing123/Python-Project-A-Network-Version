@@ -15,17 +15,25 @@ class NetworkManager:
         # Bind to any available port
         self.udp_socket.bind(('', 0))
         self.udp_socket.setblocking(False)
-        # Stocke l'adresse locale (IP, port)
-        self.local_addr = self.udp_socket.getsockname()
+        # Récupérer l'IP réelle
+        self.local_addr = (self.get_local_ip(), self.udp_socket.getsockname()[1])
         # Pour identifier les pairs uniquement par leur adresse (IP, port)
         self.peers = set()
-        # Indique si l'instance fonctionne en mode serveur (c'est-à-dire si le socket est bind sur le port 1234)
         self.is_server = False
-        # Optionnel : adresse du serveur détecté (pour les clients)
         self.server_address = None
-        # Référence à la map locale (à affecter depuis GameEngine)
         self.local_map = None
 
+    def get_local_ip(self):
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            # La connexion n'est jamais établie, cela permet juste d'obtenir l'IP locale
+            s.connect(('8.8.8.8', 80))
+            ip = s.getsockname()[0]
+        except Exception:
+            ip = '127.0.0.1'
+        finally:
+            s.close()
+        return ip
 
     def validate_peers(self):
         """Valide les pairs existants et supprime ceux qui ne sont plus valides."""
@@ -89,11 +97,9 @@ class NetworkManager:
                 return False  # Échec de l'initialisation en tant que serveur
             self.udp_socket.setblocking(False)
             self.is_server = True
-            # Met à jour l'adresse locale après le rebind
-            self.local_addr = self.udp_socket.getsockname()
-            # Vérifie que l'adresse locale est valide avant de l'ajouter
+            # Mettre à jour l'adresse locale avec l'IP réelle
+            self.local_addr = (self.get_local_ip(), self.udp_socket.getsockname()[1])
             if self.local_addr[0] != '' and self.local_addr[1] != 0:
-                # Ajoute soi-même dans la liste de pairs
                 self.peers.add(self.local_addr)
                 debug_print(f"Aucun serveur trouvé. Démarrage en tant que serveur sur {self.local_addr}.")
             else:
@@ -195,6 +201,7 @@ class NetworkManager:
                 try:
                     self.udp_socket.sendto(json_payload.encode("utf-8"), peer)
                     debug_print(f"Etat multijoueur envoyé à {peer}.")
+                    #debug_print(self.peers)
                 except socket.error as e:
                     debug_print(f"Erreur lors de l'envoi UDP à {peer}: {e}")
                     if e.errno == 10049:  # Si c'est une erreur d'adresse invalide
