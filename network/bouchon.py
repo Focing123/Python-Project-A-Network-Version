@@ -2,7 +2,7 @@ import socket
 import time
 
 BROADCAST_IP = "255.255.255.255"  # Broadcast global (ou 192.168.1.255 selon le réseau)
-BROADCAST_PORT = 12346  # LISTEN_PORT du proxy
+BROADCAST_PORT = 12347  # LISTEN_PORT du proxy
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)  # Active le mode broadcast
