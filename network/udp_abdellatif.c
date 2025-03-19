@@ -1,156 +1,103 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <sys/select.h>
 
-#ifdef _WIN32
-    #include <winsock2.h>
-    #include <ws2tcpip.h>
-    #pragma comment(lib, "ws2_32.lib")
-    #define close_socket closesocket
-#else
-    #include <arpa/inet.h>
-    #include <sys/socket.h>
-    #include <netinet/in.h>
-    #include <unistd.h>
-    #define close_socket close
-#endif
-
-#define LISTEN_PORT 12346   // Port d'écoute des événements entrants
-#define FORWARD_PORT 12345  // Port où on envoie les événements
-#define BUFFER_SIZE 65535   // Taille max d'un paquet UDP
-#define BROADCAST_IP "255.255.255.255" // Adresse de broadcast
-
-void initialize_socket_library() {
-    #ifdef _WIN32
-        WSADATA wsaData;
-        if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-            fprintf(stderr, "WSAStartup failed\n");
-            exit(EXIT_FAILURE);
-        }
-    #endif
-}
-
-void cleanup_socket_library() {
-    #ifdef _WIN32
-        WSACleanup();
-    #endif
-}
+#define PORT 1234
+#define BROADCAST_IP "255.255.255.255"
+#define BUFFER_SIZE 1024
 
 int main() {
-    initialize_socket_library();
-
-    int sock_listen, sock_receive;
-    struct sockaddr_in local_addr, forward_addr, response_addr;
-    socklen_t addr_len = sizeof(struct sockaddr_in);
+    struct sockaddr_in addr_local, addr_remote, sender_addr;
+    int sockfd;
     char buffer[BUFFER_SIZE];
+    socklen_t sender_len = sizeof(sender_addr);
 
-    // Création du socket d'écoute
-    if ((sock_listen = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        perror("Erreur création socket écoute");
-        cleanup_socket_library();
+    // Création du socket
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        perror("Erreur lors de la création du socket");
         exit(EXIT_FAILURE);
     }
 
-    // Création du socket pour recevoir les réponses
-    if ((sock_receive = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        perror("Erreur création socket réponse");
-        cleanup_socket_library();
+    // Activation de SO_REUSEADDR
+    int reuse = 1;
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
+        perror("Erreur lors de l'activation de SO_REUSEADDR");
         exit(EXIT_FAILURE);
     }
 
     // Activation du mode broadcast
-    int broadcastEnable = 1;
-    if (setsockopt(sock_listen, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable)) < 0) {
-        perror("Erreur activation broadcast");
-        close_socket(sock_listen);
-        cleanup_socket_library();
+    int broadcast_enable = 1;
+    if (setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, &broadcast_enable, sizeof(broadcast_enable)) < 0) {
+        perror("Erreur lors de l'activation du broadcast");
         exit(EXIT_FAILURE);
     }
 
-    // Configuration de l'adresse locale d'écoute
-    memset(&local_addr, 0, sizeof(local_addr));
-    local_addr.sin_family = AF_INET;
-    local_addr.sin_addr.s_addr = INADDR_ANY;
-    local_addr.sin_port = htons(LISTEN_PORT);
+    // Configuration de l'adresse locale
+    memset(&addr_local, 0, sizeof(addr_local));
+    addr_local.sin_family = AF_INET;
+    addr_local.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr_local.sin_port = htons(PORT);
 
-    // Configuration de l'adresse locale pour recevoir les réponses
-    memset(&response_addr, 0, sizeof(response_addr));
-    response_addr.sin_family = AF_INET;
-    response_addr.sin_addr.s_addr = INADDR_ANY;
-    response_addr.sin_port = htons(FORWARD_PORT);
-
-    // Configuration de l'adresse de broadcast
-    memset(&forward_addr, 0, sizeof(forward_addr));
-    forward_addr.sin_family = AF_INET;
-    forward_addr.sin_port = htons(FORWARD_PORT);
-    forward_addr.sin_addr.s_addr = inet_addr(BROADCAST_IP);
-
-    int opt = 1;
-    setsockopt(sock_listen, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-    // Lier le socket d'écoute
-    if (bind(sock_listen, (struct sockaddr *)&local_addr, sizeof(local_addr)) < 0) {
-        perror("Échec du bind (écoute)");
-        close_socket(sock_listen);
-        cleanup_socket_library();
+    // Liaison du socket
+    if (bind(sockfd, (struct sockaddr *)&addr_local, sizeof(addr_local)) < 0) {
+        perror("Erreur lors de la liaison du socket");
         exit(EXIT_FAILURE);
     }
 
-    
+    // Définition de l'adresse de broadcast
+    memset(&addr_remote, 0, sizeof(addr_remote));
+    addr_remote.sin_family = AF_INET;
+    addr_remote.sin_addr.s_addr = inet_addr(BROADCAST_IP);
+    addr_remote.sin_port = htons(PORT);
 
-    // Lier le socket de réception des réponses
-    if (bind(sock_receive, (struct sockaddr *)&response_addr, sizeof(response_addr)) < 0) {
-        perror("Échec du bind (réception)");
-        close_socket(sock_listen);
-        close_socket(sock_receive);
-        cleanup_socket_library();
-        exit(EXIT_FAILURE);
-    }
+    printf("Serveur UDP en écoute sur le port %d...\n", PORT);
 
-    printf("Proxy UDP actif : écoute sur %d, envoie en broadcast sur %s:%d, reçoit sur %d\n", 
-           LISTEN_PORT, BROADCAST_IP, FORWARD_PORT, FORWARD_PORT);
-
-    // Boucle de réception et transmission bidirectionnelle
     while (1) {
-        struct sockaddr_in sender_addr;
-        int recv_len;
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        FD_SET(sockfd, &readfds);  // Écoute sur le socket
+        FD_SET(STDIN_FILENO, &readfds);  // Écoute sur l'entrée clavier
 
-        // Écoute des événements entrants
-        recv_len = recvfrom(sock_listen, buffer, BUFFER_SIZE - 1, 0, 
-                            (struct sockaddr *)&sender_addr, &addr_len);
-        if (recv_len > 0) {
-            buffer[recv_len] = '\0';
-            printf("Reçu de %s:%d (%d bytes)\n", 
-                   inet_ntoa(sender_addr.sin_addr), ntohs(sender_addr.sin_port), recv_len);
+        // Attente d'une activité sur l'un des deux
+        int activity = select(sockfd + 1, &readfds, NULL, NULL, NULL);
+        if (activity < 0 && errno != EINTR) {
+            perror("Erreur dans select()");
+            exit(EXIT_FAILURE);
+        }
 
-            // Transmission en broadcast
-            if (sendto(sock_listen, buffer, recv_len, 0, 
-                       (struct sockaddr *)&forward_addr, sizeof(forward_addr)) < 0) {
-                perror("Erreur envoi en broadcast");
-            } else {
-                printf("Transmis en broadcast sur %s:%d\n", BROADCAST_IP, FORWARD_PORT);
+        // Vérifier si des données sont reçues sur le socket
+        if (FD_ISSET(sockfd, &readfds)) {
+            int received_bytes = recvfrom(sockfd, buffer, BUFFER_SIZE - 1, 0, (struct sockaddr *)&sender_addr, &sender_len);
+            if (received_bytes > 0) {
+                buffer[received_bytes] = '\0';
+                printf("Reçu: %s\n", buffer);
             }
         }
 
-        // Écoute des événements renvoyés
-        recv_len = recvfrom(sock_receive, buffer, BUFFER_SIZE - 1, 0, 
-                            (struct sockaddr *)&sender_addr, &addr_len);
-        if (recv_len > 0) {
-            buffer[recv_len] = '\0';
-            printf("Réponse reçue de %s:%d (%d bytes)\n", 
-                   inet_ntoa(sender_addr.sin_addr), ntohs(sender_addr.sin_port), recv_len);
+        // Vérifier si l'utilisateur a tapé un message
+        if (FD_ISSET(STDIN_FILENO, &readfds)) {
+            if (fgets(buffer, BUFFER_SIZE, stdin) != NULL) {
+                size_t len = strlen(buffer);
+                if (buffer[len - 1] == '\n') {
+                    buffer[len - 1] = '\0';
+                }
 
-            // Renvoyer au client d'origine
-            if (sendto(sock_listen, buffer, recv_len, 0, 
-                       (struct sockaddr *)&sender_addr, sizeof(sender_addr)) < 0) {
-                perror("Erreur renvoi vers client");
-            } else {
-                printf("Renvoi à %s:%d\n", inet_ntoa(sender_addr.sin_addr), ntohs(sender_addr.sin_port));
+                // Envoi en broadcast
+                if (sendto(sockfd, buffer, strlen(buffer), 0, (struct sockaddr *)&addr_remote, sizeof(addr_remote)) < 0) {
+                    perror("Erreur lors de l'envoi du message");
+                } else {
+                    printf("Envoyé: %s\n", buffer);
+                }
             }
         }
     }
 
-    close_socket(sock_listen);
-    close_socket(sock_receive);
-    cleanup_socket_library();
+    close(sockfd);
     return 0;
 }
