@@ -140,7 +140,7 @@ class GameEngine:
                 if self.network == True and self.network_manager and self.current_time - self.last_state_update >= self.state_update_interval:
                     self.send_multiplayer_state()  # Send game state to other players
                     self.network_manager.receive_game_state()  # Receive game state from other players
-                    if self.map != self.network_manager.local_map:
+                    if self.map.grid != self.network_manager.local_map.grid or self.map.resources != self.network_manager.local_map.resources:
                         self.map = self.network_manager.local_map
                     self.last_state_update = self.current_time
 
@@ -189,24 +189,18 @@ class GameEngine:
 
                 ###### CHEAT KEYS #######
 
-                elif key == ord('g'):
-                    self.players[0].owned_resources["Gold"] += 5000
-                elif key == ord('w'):
-                    self.players[0].owned_resources["Wood"] += 5000
-                elif key == ord('f'):
-                    self.players[0].owned_resources["Food"] += 5000
-                elif key == ord('h'):
-                    for player in self.players:
-                        player.owned_resources["Gold"] = 0
-                        player.owned_resources["Wood"] = 0
-                        player.owned_resources["Food"] = 0
-
                 elif key == ord('b'):
                     self.map.grid[0][0].resource = Gold()
                     self.map.resources["Gold"].append((0, 0))
                 elif key == ord('v'):
-                    self.map.grid[0][1].resource = Wood()
-                    self.map.resources["Wood"].append((0, 1))
+                    self.map.grid[1][1].resource = Wood()
+                    self.map.resources["Wood"].append((1, 1))
+                elif key == ord('h'):
+                    self.map.grid[0][0].resource = None
+                    self.map.resources["Gold"].remove((0, 0))
+                elif key == ord('g'):
+                    self.map.grid[1][1].resource = None
+                    self.map.resources["Wood"].remove((1, 1))
 
                 #########################
 
