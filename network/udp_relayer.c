@@ -18,13 +18,22 @@ DWORD WINAPI broadcast_sender(LPVOID arg) {
     struct sockaddr_in addr_recv, addr_broadcast;
     char buffer[BUFFER_SIZE];
     int addr_len = sizeof(addr_recv);
-
+    
     // Socket pour recevoir depuis Python
     sock_recv = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock_recv == INVALID_SOCKET) {
         printf("Erreur de création du socket de réception: %d\n", WSAGetLastError());
         return 1;
     }
+
+    // Ajout d'un timeout de 1 seconde sur la réception
+    DWORD timeout = 1000; // 1 seconde en millisecondes
+    if (setsockopt(sock_recv, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout)) == SOCKET_ERROR) {
+        printf("Erreur lors de la configuration du timeout: %d\n", WSAGetLastError());
+        closesocket(sock_recv);
+        return 1;
+    }
+
     memset(&addr_recv, 0, sizeof(addr_recv));
     addr_recv.sin_family = AF_INET;
     addr_recv.sin_addr.s_addr = INADDR_ANY;
@@ -59,6 +68,14 @@ DWORD WINAPI broadcast_sender(LPVOID arg) {
     printf("Thread broadcast_sender actif. Ecoute sur le port %d...\n", PY_TO_C_PORT);
     while (1) {
         int recv_len = recvfrom(sock_recv, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&addr_recv, &addr_len);
+        if (recv_len == SOCKET_ERROR) {
+            if (WSAGetLastError() == WSAETIMEDOUT) {
+                // Timeout normal, on continue
+                continue;
+            }
+            printf("Erreur de réception: %d\n", WSAGetLastError());
+            continue;
+        }
         if (recv_len > 0) {
             if (sendto(sock_broadcast, buffer, recv_len, 0, (struct sockaddr *)&addr_broadcast, sizeof(addr_broadcast)) == SOCKET_ERROR) {
                 printf("Erreur lors de l'envoi broadcast: %d\n", WSAGetLastError());
@@ -100,6 +117,15 @@ DWORD WINAPI forwarder(LPVOID arg) {
         closesocket(sock_broadcast);
         return 1;
     }
+
+    // Ajout d'un timeout de 1 seconde sur la réception broadcast
+    DWORD timeout = 1000; // 1 seconde en millisecondes
+    if (setsockopt(sock_broadcast, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout)) == SOCKET_ERROR) {
+        printf("Erreur lors de la configuration du timeout: %d\n", WSAGetLastError());
+        closesocket(sock_broadcast);
+        return 1;
+    }
+
     memset(&addr_broadcast, 0, sizeof(addr_broadcast));
     addr_broadcast.sin_family = AF_INET;
     addr_broadcast.sin_addr.s_addr = INADDR_ANY;
@@ -125,6 +151,14 @@ DWORD WINAPI forwarder(LPVOID arg) {
     printf("Thread forwarder actif. Ecoute des broadcasts sur le port %d...\n", BROADCAST_PORT);
     while (1) {
         int recv_len = recvfrom(sock_broadcast, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&addr_src, &addr_len);
+        if (recv_len == SOCKET_ERROR) {
+            if (WSAGetLastError() == WSAETIMEDOUT) {
+                // Timeout normal, on continue
+                continue;
+            }
+            printf("Erreur de réception broadcast: %d\n", WSAGetLastError());
+            continue;
+        }
         if (recv_len > 0) {
             // Vérifier si le message provient de la machine locale
             char *src_ip = inet_ntoa(addr_src.sin_addr);
