@@ -9,8 +9,7 @@
 #pragma comment(lib, "Ws2_32.lib")
 
 #define PY_TO_C_PORT 6000      // Port d'écoute pour les messages venant de Python
-#define BROADCAST_SEND_PORT 6001    // Port pour l'envoi du broadcast UDP
-#define BROADCAST_RECV_PORT 6003    // Port pour recevoir les broadcasts
+#define BROADCAST_PORT 6001    // Port pour le broadcast UDP
 #define C_TO_PY_PORT 6002      // Port de transfert vers Python locale
 #define BUFFER_SIZE 65507
 
@@ -37,9 +36,6 @@ DWORD WINAPI broadcast_sender(LPVOID arg) {
         return 1;
     }
 
-    DWORD timeout = 100; // 100ms timeout
-    setsockopt(sock_recv, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
-
     // Socket pour envoyer en broadcast
     sock_broadcast = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock_broadcast == INVALID_SOCKET) {
@@ -57,33 +53,26 @@ DWORD WINAPI broadcast_sender(LPVOID arg) {
     
     memset(&addr_broadcast, 0, sizeof(addr_broadcast));
     addr_broadcast.sin_family = AF_INET;
-    addr_broadcast.sin_port = htons(BROADCAST_SEND_PORT);
+    addr_broadcast.sin_port = htons(BROADCAST_PORT);
     addr_broadcast.sin_addr.s_addr = inet_addr("255.255.255.255"); // Broadcast général
 
     printf("Thread broadcast_sender actif. Ecoute sur le port %d...\n", PY_TO_C_PORT);
     while (1) {
         int recv_len = recvfrom(sock_recv, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&addr_recv, &addr_len);
-        if (recv_len == SOCKET_ERROR) {
-            if (WSAGetLastError() == WSAETIMEDOUT) {
-                Sleep(10); // Small pause to reduce CPU usage
-                continue;
-            }
-            printf("Erreur lors de la réception: %d\n", WSAGetLastError());
-            continue;
-        }
         if (recv_len > 0) {
             if (sendto(sock_broadcast, buffer, recv_len, 0, (struct sockaddr *)&addr_broadcast, sizeof(addr_broadcast)) == SOCKET_ERROR) {
                 printf("Erreur lors de l'envoi broadcast: %d\n", WSAGetLastError());
             } else {
                 printf("Données reçues de Python et retransmises en broadcast.\n");
             }
+        } else {
+            printf("Erreur lors de la réception des données: %d\n", WSAGetLastError());
         }
     }
     closesocket(sock_recv);
     closesocket(sock_broadcast);
     return 0;
 }
-
 
 DWORD WINAPI forwarder(LPVOID arg) {
     SOCKET sock_broadcast = INVALID_SOCKET, sock_forward = INVALID_SOCKET;
@@ -116,15 +105,12 @@ DWORD WINAPI forwarder(LPVOID arg) {
     memset(&addr_broadcast, 0, sizeof(addr_broadcast));
     addr_broadcast.sin_family = AF_INET;
     addr_broadcast.sin_addr.s_addr = INADDR_ANY;
-    addr_broadcast.sin_port = htons(BROADCAST_RECV_PORT);
+    addr_broadcast.sin_port = htons(BROADCAST_PORT);
     if (bind(sock_broadcast, (struct sockaddr *)&addr_broadcast, sizeof(addr_broadcast)) == SOCKET_ERROR) {
         printf("Erreur lors du bind du socket broadcast (recep): %d\n", WSAGetLastError());
         closesocket(sock_broadcast);
         return 1;
     }
-
-    DWORD timeout = 100; // 100ms timeout
-    setsockopt(sock_broadcast, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
 
     // Socket pour forwarder vers Python
     sock_forward = socket(AF_INET, SOCK_DGRAM, 0);
@@ -138,30 +124,20 @@ DWORD WINAPI forwarder(LPVOID arg) {
     addr_forward.sin_port = htons(C_TO_PY_PORT);
     addr_forward.sin_addr.s_addr = inet_addr("127.0.0.1");
 
-    printf("Thread forwarder actif. Ecoute des broadcasts sur le port %d...\n", BROADCAST_RECV_PORT);
+    printf("Thread forwarder actif. Ecoute des broadcasts sur le port %d...\n", BROADCAST_PORT);
     while (1) {
         int recv_len = recvfrom(sock_broadcast, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&addr_src, &addr_len);
-        if (recv_len == SOCKET_ERROR) {
-            if (WSAGetLastError() == WSAETIMEDOUT) {
-                Sleep(10); // Small pause to reduce CPU usage
-                continue;
-            }
-            printf("Erreur lors de la réception broadcast: %d\n", WSAGetLastError());
-            continue;
-        }
         if (recv_len > 0) {
             // Vérifier si le message provient de la machine locale
             char *src_ip = inet_ntoa(addr_src.sin_addr);
-            if (strcmp(src_ip, localIP) == 0) {
-                // Le message provient de nous-même, ne pas le forwarder
-                continue;
-            }
             if (sendto(sock_forward, buffer, recv_len, 0, (struct sockaddr *)&addr_forward, sizeof(addr_forward)) == SOCKET_ERROR) {
                 printf("Erreur lors du forwarding vers Python: %d\n", WSAGetLastError());
             } else {
                 printf("Message broadcast reçu de %s:%d et transmis à Python.\n",
                        src_ip, ntohs(addr_src.sin_port));
             }
+        } else {
+            printf("Erreur lors de la réception des données broadcast: %d\n", WSAGetLastError());
         }
     }
     closesocket(sock_broadcast);
