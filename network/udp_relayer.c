@@ -50,16 +50,18 @@ DWORD WINAPI broadcast_sender(LPVOID arg) {
         closesocket(sock_broadcast);
         return 1;
     }
-    
-    memset(&addr_broadcast, 0, sizeof(addr_broadcast));
-    addr_broadcast.sin_family = AF_INET;
-    addr_broadcast.sin_port = htons(BROADCAST_PORT);
-    addr_broadcast.sin_addr.s_addr = inet_addr("255.255.255.255"); // Broadcast général
 
     printf("Thread broadcast_sender actif. Ecoute sur le port %d...\n", PY_TO_C_PORT);
+
     while (1) {
         int recv_len = recvfrom(sock_recv, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&addr_recv, &addr_len);
         if (recv_len > 0) {
+            // Configuration de l'adresse de broadcast
+            memset(&addr_broadcast, 0, sizeof(addr_broadcast));
+            addr_broadcast.sin_family = AF_INET;
+            addr_broadcast.sin_port = htons(BROADCAST_PORT);
+            addr_broadcast.sin_addr.s_addr = INADDR_BROADCAST;
+
             if (sendto(sock_broadcast, buffer, recv_len, 0, (struct sockaddr *)&addr_broadcast, sizeof(addr_broadcast)) == SOCKET_ERROR) {
                 printf("Erreur lors de l'envoi broadcast: %d\n", WSAGetLastError());
             } else {
@@ -79,16 +81,6 @@ DWORD WINAPI forwarder(LPVOID arg) {
     struct sockaddr_in addr_broadcast, addr_forward, addr_src;
     char buffer[BUFFER_SIZE];
     int addr_len = sizeof(addr_src);
-
-    // Récupérer l'IP locale
-    char localHostname[256];
-    char localIP[INET_ADDRSTRLEN] = "";
-    if (gethostname(localHostname, sizeof(localHostname)) == 0) {
-        struct hostent *host = gethostbyname(localHostname);
-        if (host && host->h_addr_list[0]) {
-            inet_ntop(AF_INET, host->h_addr_list[0], localIP, sizeof(localIP));
-        }
-    }
 
     // Socket pour recevoir les broadcasts
     sock_broadcast = socket(AF_INET, SOCK_DGRAM, 0);
@@ -128,13 +120,10 @@ DWORD WINAPI forwarder(LPVOID arg) {
     while (1) {
         int recv_len = recvfrom(sock_broadcast, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&addr_src, &addr_len);
         if (recv_len > 0) {
-            // Vérifier si le message provient de la machine locale
-            char *src_ip = inet_ntoa(addr_src.sin_addr);
             if (sendto(sock_forward, buffer, recv_len, 0, (struct sockaddr *)&addr_forward, sizeof(addr_forward)) == SOCKET_ERROR) {
                 printf("Erreur lors du forwarding vers Python: %d\n", WSAGetLastError());
             } else {
-                printf("Message broadcast reçu de %s:%d et transmis à Python.\n",
-                       src_ip, ntohs(addr_src.sin_port));
+                printf("Message broadcast reçu et transmis à Python.\n");
             }
         } else {
             printf("Erreur lors de la réception des données broadcast: %d\n", WSAGetLastError());
