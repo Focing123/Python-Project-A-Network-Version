@@ -309,33 +309,6 @@ class Map:
                     state["resources"].append(resource_state)
         return state
 
-    def initialize_from_state(self, state):
-        """Initialize the map from a network-received state"""
-        if not isinstance(state, dict):
-            raise ValueError("Invalid state format")
-
-        # Reset all tiles' resources to None
-        for y in range(self.height):
-            for x in range(self.width):
-                self.grid[y][x].resource = None
-
-        # Initialize resources from state
-        self.resources = {"Gold": [], "Wood": []}
-        for resource in state.get("resources", []):
-            x, y = resource["coordinates"]
-            resource_type = resource["type"]
-            
-            if resource_type == "Wood":
-                self.grid[y][x].resource = Wood()
-                self.resources["Wood"].append((x, y))
-            elif resource_type == "Gold":
-                self.grid[y][x].resource = Gold()
-                self.resources["Gold"].append((x, y))
-            
-            # Set the amount if it exists in the state
-            if "amount" in resource:
-                self.grid[y][x].resource.amount = resource["amount"]
-
 class Tile:
     def __init__(self, x, y):
         self.x = x

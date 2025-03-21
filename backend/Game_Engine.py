@@ -41,28 +41,10 @@ class GameEngine:
         else:
             self.network_manager = None
 
-        # Initialization de la carte en fonction du rôle réseau : le serveur initialise la carte, le client attend son état
-        if not self.network or (self.network and self.network_manager.is_server):
-            self.map = Map(*map_size)
-            if self.network and self.network_manager.is_server:
-                self.map=Map(*map_size)  # Initialiser la carte avec la taille spécifiée
-                self.network_manager.local_map = self.map
-        else:
-            # Attendre l'état initial de la carte en provenance du serveur
-            self.map = None
-            while not self.map:
-                if self.network_manager:
-                    state = self.network_manager.receive_game_state()
-                    if state and 'map' in state:
-                        if state['map'] and state['width'] and state['height']:
-                            self.map = Map(state['width'], state['height'])
-                            self.map.initialize_from_state(state['map'])
-                            self.network_manager.local_map = self.map  # Mettre à jour la carte du gestionnaire réseau
-                        else:
-                            raise ValueError("Invalid map state received from server")
-                        break
-            if not self.map:
-                raise Exception("Failed to receive initial map state from server")
+        # Initialization de la carte en fonction du rôle réseau : le serveur initialise la carte, le client attend son état:
+        self.map = Map(*map_size)
+        if self.network:
+            self.network_manager.local_map = self.map
         
         self.turn = 0
         self.is_paused = False  # Flag pour vérifier si le jeu est en pause
