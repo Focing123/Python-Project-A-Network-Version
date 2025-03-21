@@ -1,3 +1,8 @@
+//ETRE_ WIFI POUR LE RELAIS UDP --> 172.20.10.TOI
+//VOUS ETES DOWNNNNN
+
+
+
 #define WIN32_LEAN_AND_MEAN
 #include <stdio.h>
 #include <stdlib.h>
