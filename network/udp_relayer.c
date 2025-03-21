@@ -25,7 +25,6 @@ DWORD WINAPI broadcast_sender(LPVOID arg) {
         printf("Erreur de création du socket de réception: %d\n", WSAGetLastError());
         return 1;
     }
-
     memset(&addr_recv, 0, sizeof(addr_recv));
     addr_recv.sin_family = AF_INET;
     addr_recv.sin_addr.s_addr = INADDR_ANY;
@@ -51,11 +50,11 @@ DWORD WINAPI broadcast_sender(LPVOID arg) {
         closesocket(sock_broadcast);
         return 1;
     }
-
     memset(&addr_broadcast, 0, sizeof(addr_broadcast));
     addr_broadcast.sin_family = AF_INET;
     addr_broadcast.sin_port = htons(BROADCAST_PORT);
-    addr_broadcast.sin_addr.s_addr = inet_addr("255.255.255.255");
+    // Adaptation : utiliser le broadcast correspondant à l'interface Wi-Fi (pour 172.20.10.0/28, broadcast=172.20.10.15)
+    addr_broadcast.sin_addr.s_addr = inet_addr("172.20.10.15");
 
     printf("Thread broadcast_sender actif. Ecoute sur le port %d...\n", PY_TO_C_PORT);
     while (1) {
