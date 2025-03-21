@@ -7,29 +7,31 @@ from frontend.Terrain import Gold, Wood  # Assurez-vous que le chemin d'import e
 from backend.Units import *
 from backend.Units import Villager, Swordsman, Horseman, Archer, Unit
 
+# Ports de communication avec le programme C
+PY_TO_C_PORT = 6000      # Port où le process C reçoit les données venant du Python
+C_TO_PY_PORT = 6002      # Port où le process C envoie les données (forwarded broadcast) au Python
+
 class NetworkManager:
-    def __init__(self, peer_to_peer=False):
+    def __init__(self, peer_to_peer=False, is_server=True):
         self.peer_to_peer = peer_to_peer
-        self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        self.udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.broadcast_address = ("255.255.255.255", 1234)
-        # Bind to any available port
-        self.udp_socket.bind(('', 0))
-        self.udp_socket.setblocking(False)
+        self.is_server = is_server  # Définition de l'attribut is_server
+        # Socket pour envoyer les données vers le programme C
+        self.send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # Socket pour recevoir les messages du programme C
+        self.recv_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            self.recv_socket.bind(('', C_TO_PY_PORT))
+        except Exception as e:
+            debug_print(f"Erreur lors du bind du socket de réception sur le port {C_TO_PY_PORT}: {e}")
         # Récupérer l'IP réelle
-        self.local_addr = (self.get_local_ip(), self.udp_socket.getsockname()[1])
-        # Pour identifier les pairs uniquement par leur adresse (IP, port)
-        self.peers = set()
-        self.is_server = False
-        self.server_address = None
+        self.local_ip = self.get_local_ip()
+        # les autres parties du code restent inchangées
         self.local_map = None
         self.remote_players = {}  # Dictionnaire: { addr: RemotePlayer }
 
     def get_local_ip(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
-            # La connexion n'est jamais établie, cela permet juste d'obtenir l'IP locale
             s.connect(('8.8.8.8', 80))
             ip = s.getsockname()[0]
         except Exception:
@@ -39,108 +41,21 @@ class NetworkManager:
         return ip
 
     def validate_peers(self):
-        """Valide les pairs existants et supprime ceux qui ne sont plus valides."""
-        invalid_peers = set()
-        for peer in self.peers:
-            if peer != self.local_addr:
-                try:
-                    # Envoyer un message ping pour vérifier si le pair est toujours accessible
-                    ping_message = json.dumps({"type": "ping"})
-                    self.udp_socket.sendto(ping_message.encode("utf-8"), peer)
-                except socket.error:
-                    invalid_peers.add(peer)
-        
-        # Supprimer les pairs invalides
-        for invalid_peer in invalid_peers:
-            self.peers.remove(invalid_peer)
-            debug_print(f"Pair supprimé (validation): {invalid_peer}")
+        """Validation des pairs désactivée en mode relais C."""
+        debug_print("Validation des pairs désactivée en mode relais C.")
             
     def run_peer_discovery(self, timeout=5):
-        """Lance la découverte des pairs."""
-        if not self.peer_to_peer:
-            return
-
-        discovery_message = json.dumps({"type": "discovery_request"})
-        self.udp_socket.sendto(discovery_message.encode("utf-8"), self.broadcast_address)
-        start_time = time.time()
-        response_received = False
-
-        while time.time() - start_time < timeout:
-            ready = select.select([self.udp_socket], [], [], 0.5)
-            if ready[0]:
-                try:
-                    data, addr = self.udp_socket.recvfrom(65535)
-                    message = json.loads(data.decode("utf-8"))
-                    if message.get("type") == "discovery_response":
-                        # Vérifier que l'adresse est valide avant de l'ajouter
-                        if addr[0] != '' and addr[1] != 0:
-                            # Pour le client, on stocke l'adresse du serveur
-                            self.server_address = addr
-                            # On traite la liste des pairs reçue
-                            peers = message.get("peers", [])
-                            for p in peers:
-                                if isinstance(p, list) and len(p) == 2 and p[0] != '' and p[1] != 0:
-                                    self.peers.add(tuple(p))
-                            response_received = True
-                            debug_print(f"Serveur détecté depuis {addr}.")
-                            break
-                except Exception as e:
-                    debug_print(f"Erreur lors de la découverte des pairs: {e}")
-
-        if not response_received:
-            # Aucune réponse : rebind du socket sur le port 1234 et déclaration en tant que serveur.
-            self.udp_socket.close()
-            self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            self.udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            self.udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            try:
-                self.udp_socket.bind(('', 1234))  # Le serveur écoute sur le port 1234
-            except Exception as e:
-                debug_print(f"Erreur lors du bind sur le port 1234 : {e}")
-                return False  # Échec de l'initialisation en tant que serveur
-            self.udp_socket.setblocking(False)
-            self.is_server = True
-            # Mettre à jour l'adresse locale avec l'IP réelle
-            self.local_addr = (self.get_local_ip(), self.udp_socket.getsockname()[1])
-            if self.local_addr[0] != '' and self.local_addr[1] != 0:
-                self.peers.add(self.local_addr)
-                debug_print(f"Aucun serveur trouvé. Démarrage en tant que serveur sur {self.local_addr}.")
-            else:
-                debug_print("Adresse locale invalide, impossible de démarrer en tant que serveur.")
-                return False
-        
+        """La découverte des pairs est désactivée en mode relais C."""
+        debug_print("La découverte des pairs est désactivée en mode relais C.")
         return True
 
     def handle_incoming_discovery(self):
-        """Traite en boucle les demandes de découverte entrantes (pour le serveur)."""
-        ready = select.select([self.udp_socket], [], [], 0)
-        if ready[0]:
-            try:
-                data, addr = self.udp_socket.recvfrom(65535)
-                message = json.loads(data.decode("utf-8"))
-                
-                if message.get("type") == "discovery_request" and self.is_server:
-                    # Ajoute le pair à la liste, mais vérifie s'il est valide
-                    if addr[0] != '':  # Vérifier que l'adresse IP n'est pas vide
-                        self.peers.add(addr)
-                        response = {
-                            "type": "discovery_response",
-                            "peers": [list(peer) for peer in self.peers if peer[0] != '']
-                        }
-                        self.udp_socket.sendto(json.dumps(response).encode("utf-8"), addr)
-                        debug_print(f"Réponse envoyée à la demande de découverte de {addr}.")
-                    
-                elif message.get("type") == "server_announcement" and not self.is_server:
-                    peers = message.get("peers", [])
-                    for p in peers:
-                        self.peers.add(tuple(p))
-                    debug_print(f"Mise à jour des pairs: {self.peers}")
-                    
-            except Exception as e:
-                debug_print(f"Erreur lors du traitement de la découverte: {e}")
+        """Traite en boucle les demandes de découverte entrantes.
+        La découverte des pairs est désactivée en mode relais C."""
+        debug_print("handle_incoming_discovery: découverte des pairs désactivée en mode relais C.")
 
     def send_game_state(self, game_state, nature='data'):
-        """Envoie l'état du jeu via UDP en utilisant la liste des pairs."""
+        """Envoie l'état du jeu vers le programme C via UDP (port non-broadcast)."""
         try:
             map_state = game_state.map.get_state()
         except AttributeError:
@@ -183,73 +98,44 @@ class NetworkManager:
                 }
             players_state.append(p_state)
 
-        if nature == 'data':
-            state = {
-                "type": "game_data",
-                "map": map_state,
-                "width": game_state.map.width,
-                "height": game_state.map.height,
-                "players": players_state,
-                "actions": []
-            }
-        elif nature == 'discovery':
-                state = {
-                "type": "game_data",
-                "map": map_state,
-                "players": players_state,
-                "actions": []
-            }
+        state = {
+            "type": "game_data",
+            "map": map_state,
+            "width": getattr(game_state.map, "width", 0),
+            "height": getattr(game_state.map, "height", 0),
+            "players": players_state,
+            "actions": []
+        }
         json_payload = json.dumps(state)
-        invalid_peers = set()
-        
-        # Envoi vers tous les pairs connus sauf soi-même
-        for peer in self.peers:
-            if peer != self.local_addr:
-                try:
-                    self.udp_socket.sendto(json_payload.encode("utf-8"), peer)
-                    debug_print(f"Etat multijoueur envoyé à {peer}.")
-                    #debug_print(self.peers)
-                except socket.error as e:
-                    debug_print(f"Erreur lors de l'envoi UDP à {peer}: {e}")
-                    if e.errno == 10049:  # Si c'est une erreur d'adresse invalide
-                        invalid_peers.add(peer)
-        
-        # Supprimer les pairs invalides
-        for invalid_peer in invalid_peers:
-            self.peers.remove(invalid_peer)
-            debug_print(f"Pair supprimé: {invalid_peer}")
+        try:
+            # Envoie vers le programme C en local (pas de broadcast ici)
+            self.send_socket.sendto(json_payload.encode("utf-8"), ("127.0.0.1", PY_TO_C_PORT))
+            debug_print("État du jeu envoyé au programme C.")
+        except socket.error as e:
+            debug_print(f"Erreur lors de l'envoi UDP vers le programme C: {e}")
 
     def receive_game_state(self, timeout=0.001):
-        """Reçoit l'état du jeu via UDP, applique les changements de ressources sur la map locale et retourne le payload."""
+        """Reçoit l'état du jeu envoyé par le programme C via UDP (données broadcast forwardées)."""
+        self.recv_socket.settimeout(timeout)
         try:
-            ready = select.select([self.udp_socket], [], [], timeout)
-            if ready[0]:
-                try:
-                    # Utilisez 65507 pour la taille de buffer (charge utile max UDP)
-                    data, addr = self.udp_socket.recvfrom(65507)
-                    payload = json.loads(data.decode('utf-8'))
-                    
-                    if payload.get("type") == "game_data":
-                        if addr != self.local_addr:
-                            debug_print(f"État multijoueur reçu de {addr}.")
-                            self.apply_state_to_game(payload, sender_addr=addr)
-                        return payload
-                    elif payload.get("type") in ["discovery_request", "discovery_response", "server_announcement"]:
-                        self.handle_incoming_discovery()
-                        return None
-                except Exception as e:
-                    debug_print(f"Erreur lors de la réception UDP: {e}")
+            data, addr = self.recv_socket.recvfrom(65507)
+            payload = json.loads(data.decode('utf-8'))
+            if payload.get("type") == "game_data":
+                debug_print(f"État multijoueur reçu via le programme C depuis {addr}.")
+                self.apply_state_to_game(payload, sender_addr=addr)
+                return payload
+        except socket.timeout:
             return None
         except Exception as e:
-            debug_print(f"Erreur dans receive_game_state: {e}")
-            return None
+            debug_print(f"Erreur lors de la réception UDP sur le port {C_TO_PY_PORT}: {e}")
+        return None
 
     def apply_state_to_game(self, payload, sender_addr=None):
         """Met à jour la map locale à partir du payload.
         Les unités des joueurs distants sont recréées et mises à jour dans la map."""
         map_state = payload.get("map", {})
         if self.local_map is not None:
-            ####### MàJ des ressources (identique) ########
+            # MàJ des ressources
             remote_resources = map_state.get("resources", [])
             if not isinstance(remote_resources, list):
                 debug_print("Structure des resources invalide, attendu une liste.")
@@ -265,17 +151,12 @@ class NetworkManager:
                         self.local_map.resources[res_type].append((x, y))
                         debug_print(f"Nouvelle resource ajoutée de type {res_type} à ({x}, {y}) avec quantité {amount}.")
                         if y < len(self.local_map.grid) and x < len(self.local_map.grid[y]):
-                            if res_type == "Gold":
-                                resource_obj = Gold()
-                            elif res_type == "Wood":
-                                resource_obj = Wood()
-                            else:
-                                resource_obj = None
+                            resource_obj = Gold() if res_type == "Gold" else Wood() if res_type == "Wood" else None
                             if resource_obj is not None:
                                 resource_obj.amount = amount
                                 self.local_map.grid[y][x].resource = resource_obj
 
-            ####### MàJ des joueurs et de leurs unités ########
+            # MàJ des joueurs et de leurs unités
             players_state = payload.get("players", [])
             if not isinstance(players_state, list):
                 debug_print("Structure des joueurs invalide, attendu une liste.")
@@ -288,14 +169,11 @@ class NetworkManager:
                 "Unit": Unit
             }
             for player in players_state:
-                # Utiliser l'id contenu dans le payload, sinon on utilise sender_addr comme fallback
                 player_key = player.get("id") or sender_addr
                 if player_key in self.remote_players:
                     remote_player = self.remote_players[player_key]
-                    # (Optionnel) Effacer les anciennes unités associées à ce joueur dans la map
                 else:
                     remote_player = RemotePlayer(sender_addr)
-                    # Pensez aussi à sauvegarder cet id dans RemotePlayer pour display_viewport:
                     remote_player.id = player.get("id") or remote_player.id
                     self.remote_players[player_key] = remote_player
 
@@ -311,7 +189,6 @@ class NetworkManager:
                             if unit_cls is None:
                                 debug_print(f"Classe d'unité non reconnue: {unit_class_name}")
                                 continue
-                            # Créer l'unité en utilisant le RemotePlayer comme player
                             unit = unit_cls(player=remote_player, position=tuple(unit_state.get("position", (0, 0))))
                             unit.hp = unit_state.get("hp")
                             unit.target_position = unit_state.get("target_position")
@@ -329,8 +206,9 @@ class NetworkManager:
                             debug_print(f"Unité ajoutée dans la tile ({x}, {y}) pour le joueur {remote_player.name}.")
 
     def close(self):
-        """Ferme la connexion réseau."""
-        self.udp_socket.close()
+        """Ferme les sockets réseau."""
+        self.send_socket.close()
+        self.recv_socket.close()
 
 class RemotePlayer:
     def __init__(self, addr, name=None):

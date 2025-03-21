@@ -395,10 +395,8 @@ class GameEngine:
         if self.network_manager:
             if self.network_manager.is_server:
                 self.network_manager.handle_incoming_discovery()
-            if len(self.network_manager.peers) > 1:
-                self.network_manager.send_game_state(self, nature='data')
-            else:
-                self.network_manager.send_game_state(self, nature='discovery')
+            # On envoie toujours l'état du jeu en mode 'data'
+            self.network_manager.send_game_state(self, nature='data')
 
 
     def __del__(self):
