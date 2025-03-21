@@ -37,6 +37,9 @@ DWORD WINAPI broadcast_sender(LPVOID arg) {
         return 1;
     }
 
+    DWORD timeout = 100; // 100ms timeout
+    setsockopt(sock_recv, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
+
     // Socket pour envoyer en broadcast
     sock_broadcast = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock_broadcast == INVALID_SOCKET) {
@@ -60,6 +63,14 @@ DWORD WINAPI broadcast_sender(LPVOID arg) {
     printf("Thread broadcast_sender actif. Ecoute sur le port %d...\n", PY_TO_C_PORT);
     while (1) {
         int recv_len = recvfrom(sock_recv, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&addr_recv, &addr_len);
+        if (recv_len == SOCKET_ERROR) {
+            if (WSAGetLastError() == WSAETIMEDOUT) {
+                Sleep(10); // Small pause to reduce CPU usage
+                continue;
+            }
+            printf("Erreur lors de la réception: %d\n", WSAGetLastError());
+            continue;
+        }
         if (recv_len > 0) {
             if (sendto(sock_broadcast, buffer, recv_len, 0, (struct sockaddr *)&addr_broadcast, sizeof(addr_broadcast)) == SOCKET_ERROR) {
                 printf("Erreur lors de l'envoi broadcast: %d\n", WSAGetLastError());
@@ -112,6 +123,9 @@ DWORD WINAPI forwarder(LPVOID arg) {
         return 1;
     }
 
+    DWORD timeout = 100; // 100ms timeout
+    setsockopt(sock_broadcast, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
+
     // Socket pour forwarder vers Python
     sock_forward = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock_forward == INVALID_SOCKET) {
@@ -127,6 +141,14 @@ DWORD WINAPI forwarder(LPVOID arg) {
     printf("Thread forwarder actif. Ecoute des broadcasts sur le port %d...\n", BROADCAST_RECV_PORT);
     while (1) {
         int recv_len = recvfrom(sock_broadcast, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&addr_src, &addr_len);
+        if (recv_len == SOCKET_ERROR) {
+            if (WSAGetLastError() == WSAETIMEDOUT) {
+                Sleep(10); // Small pause to reduce CPU usage
+                continue;
+            }
+            printf("Erreur lors de la réception broadcast: %d\n", WSAGetLastError());
+            continue;
+        }
         if (recv_len > 0) {
             // Vérifier si le message provient de la machine locale
             char *src_ip = inet_ntoa(addr_src.sin_addr);

@@ -114,18 +114,19 @@ class NetworkManager:
         except socket.error as e:
             debug_print(f"Erreur lors de l'envoi UDP vers le programme C: {e}")
 
-    def receive_game_state(self, timeout=0.001):
-        """Reçoit l'état du jeu envoyé par le programme C via UDP (données broadcast forwardées)."""
+    def receive_game_state(self, timeout=0.1):  # Increase timeout to 100ms
         self.recv_socket.settimeout(timeout)
         try:
-            data, addr = self.recv_socket.recvfrom(65507)
-            payload = json.loads(data.decode('utf-8'))
-            if payload.get("type") == "game_data":
-                debug_print(f"État multijoueur reçu via le programme C depuis {addr}.")
-                self.apply_state_to_game(payload, sender_addr=addr)
-                return payload
-        except socket.timeout:
-            return None
+            while True:  # Loop to process all incoming packets
+                try:
+                    data, addr = self.recv_socket.recvfrom(65507)
+                    payload = json.loads(data.decode('utf-8'))
+                    if payload.get("type") == "game_data":
+                        debug_print(f"État multijoueur reçu via le programme C depuis {addr}.")
+                        self.apply_state_to_game(payload, sender_addr=addr)
+                        return payload
+                except socket.timeout:
+                    return None  # Exit after timeout
         except Exception as e:
             debug_print(f"Erreur lors de la réception UDP sur le port {C_TO_PY_PORT}: {e}")
         return None
