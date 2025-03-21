@@ -33,6 +33,7 @@ class GameEngine:
         self.network = network_mode
         self.map_size = map_size
         self.players = players
+        self.visitors = []
         # Initialisation du gestionnaire réseau
         if self.network:
             self.network_manager = NetworkManager(peer_to_peer=self.network)

@@ -4,6 +4,8 @@ import select
 import time
 from backend.logger import debug_print
 from frontend.Terrain import Gold, Wood  # Assurez-vous que le chemin d'import est correct
+from backend.Units import *
+from backend.Units import Villager, Swordsman, Horseman, Archer, Unit
 
 class NetworkManager:
     def __init__(self, peer_to_peer=False):
@@ -22,6 +24,7 @@ class NetworkManager:
         self.is_server = False
         self.server_address = None
         self.local_map = None
+        self.remote_players = {}  # Dictionnaire: { addr: RemotePlayer }
 
     def get_local_ip(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -127,7 +130,7 @@ class NetworkManager:
                         self.udp_socket.sendto(json.dumps(response).encode("utf-8"), addr)
                         debug_print(f"Réponse envoyée à la demande de découverte de {addr}.")
                     
-                elif message.get("type") == ["server_announcement"] and not self.is_server:
+                elif message.get("type") == "server_announcement" and not self.is_server:
                     peers = message.get("peers", [])
                     for p in peers:
                         self.peers.add(tuple(p))
@@ -152,6 +155,8 @@ class NetworkManager:
                     "name": getattr(player, "name", "inconnu"),
                     "units": [
                         {
+                            'player': getattr(player, "name", None),
+                            "class": unit.__class__.__name__,
                             "hp": getattr(unit, "hp", None),
                             "position": getattr(unit, "position", None),
                             "target_position": getattr(unit, "target_position", None),
@@ -184,6 +189,8 @@ class NetworkManager:
                 "map": map_state,
                 "width": game_state.map.width,
                 "height": game_state.map.height,
+                "players": players_state,
+                "actions": []
             }
         elif nature == 'discovery':
                 state = {
@@ -223,11 +230,9 @@ class NetworkManager:
                     payload = json.loads(data.decode('utf-8'))
                     
                     if payload.get("type") == "game_data":
-                        # Ignore le message si il provient de soi-même
                         if addr != self.local_addr:
                             debug_print(f"État multijoueur reçu de {addr}.")
-                            # Appliquer les changements de ressources dans la map locale
-                            self.apply_state_to_game(payload)
+                            self.apply_state_to_game(payload, sender_addr=addr)
                         return payload
                     elif payload.get("type") in ["discovery_request", "discovery_response", "server_announcement"]:
                         self.handle_incoming_discovery()
@@ -239,13 +244,13 @@ class NetworkManager:
             debug_print(f"Erreur dans receive_game_state: {e}")
             return None
 
-    def apply_state_to_game(self, payload):
-        """Pour chaque ressource reçue dans le payload, si elle n'existe pas dans la map locale,
-        on l'ajoute dans self.local_map.resources et on met à jour la case correspondante de la grille.
-        La map locale possède une structure : {"Gold": [], "Wood": []}."""
+    def apply_state_to_game(self, payload, sender_addr=None):
+        """Met à jour la map locale à partir du payload.
+        Les unités des joueurs distants sont recréées et mises à jour dans la map."""
         map_state = payload.get("map", {})
-        if "resources" in map_state and self.local_map is not None:
-            remote_resources = map_state["resources"]
+        if self.local_map is not None:
+            ####### MàJ des ressources (identique) ########
+            remote_resources = map_state.get("resources", [])
             if not isinstance(remote_resources, list):
                 debug_print("Structure des resources invalide, attendu une liste.")
                 return
@@ -253,7 +258,6 @@ class NetworkManager:
                 res_type = resource.get("type")
                 x, y = resource.get("coordinates", (None, None))
                 amount = resource.get("amount")
-
                 if res_type and x is not None and y is not None:
                     if res_type not in self.local_map.resources:
                         self.local_map.resources[res_type] = []
@@ -271,6 +275,69 @@ class NetworkManager:
                                 resource_obj.amount = amount
                                 self.local_map.grid[y][x].resource = resource_obj
 
+            ####### MàJ des joueurs et de leurs unités ########
+            players_state = payload.get("players", [])
+            if not isinstance(players_state, list):
+                debug_print("Structure des joueurs invalide, attendu une liste.")
+                return
+            unit_mapping = {
+                "Villager": Villager,
+                "Swordsman": Swordsman,
+                "Horseman": Horseman,
+                "Archer": Archer,
+                "Unit": Unit
+            }
+            for player in players_state:
+                # Utiliser l'id contenu dans le payload, sinon on utilise sender_addr comme fallback
+                player_key = player.get("id") or sender_addr
+                if player_key in self.remote_players:
+                    remote_player = self.remote_players[player_key]
+                    # (Optionnel) Effacer les anciennes unités associées à ce joueur dans la map
+                else:
+                    remote_player = RemotePlayer(sender_addr)
+                    # Pensez aussi à sauvegarder cet id dans RemotePlayer pour display_viewport:
+                    remote_player.id = player.get("id") or remote_player.id
+                    self.remote_players[player_key] = remote_player
+
+                units_state = player.get("units", [])
+                for unit_state in units_state:
+                    pos = unit_state.get("position")
+                    if pos is not None:
+                        x, y = pos
+                        if 0 <= y < len(self.local_map.grid) and 0 <= x < len(self.local_map.grid[y]):
+                            tile = self.local_map.grid[y][x]
+                            unit_class_name = unit_state.get("class")
+                            unit_cls = unit_mapping.get(unit_class_name)
+                            if unit_cls is None:
+                                debug_print(f"Classe d'unité non reconnue: {unit_class_name}")
+                                continue
+                            # Créer l'unité en utilisant le RemotePlayer comme player
+                            unit = unit_cls(player=remote_player, position=tuple(unit_state.get("position", (0, 0))))
+                            unit.hp = unit_state.get("hp")
+                            unit.target_position = unit_state.get("target_position")
+                            unit.target_attack = unit_state.get("target_attack")
+                            unit.is_attacked_by = unit_state.get("is_attacked_by")
+                            unit.direction = unit_state.get("direction")
+                            unit.current_frame = unit_state.get("current_frame")
+                            unit.frame_counter = unit_state.get("frame_counter")
+                            unit.is_moving = unit_state.get("is_moving")
+                            unit.task = unit_state.get("task")
+                            
+                            if not hasattr(tile, "unit") or tile.unit is None:
+                                tile.unit = []
+                            tile.unit.append(unit)
+                            debug_print(f"Unité ajoutée dans la tile ({x}, {y}) pour le joueur {remote_player.name}.")
+
     def close(self):
         """Ferme la connexion réseau."""
         self.udp_socket.close()
+
+class RemotePlayer:
+    def __init__(self, addr, name=None):
+        self.addr = addr
+        if name is None:
+            self.name = f"Remote-{addr[0]}:{addr[1]}"
+        else:
+            debug_print("***************************************")
+            self.name = name
+        self.id = abs(hash(self.name)) % 100
