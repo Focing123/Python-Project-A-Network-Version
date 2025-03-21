@@ -50,11 +50,11 @@ DWORD WINAPI broadcast_sender(LPVOID arg) {
         closesocket(sock_broadcast);
         return 1;
     }
+    
     memset(&addr_broadcast, 0, sizeof(addr_broadcast));
     addr_broadcast.sin_family = AF_INET;
     addr_broadcast.sin_port = htons(BROADCAST_PORT);
-    // Adaptation : utiliser le broadcast correspondant à l'interface Wi-Fi (pour 172.20.10.0/28, broadcast=172.20.10.15)
-    addr_broadcast.sin_addr.s_addr = inet_addr("172.20.10.15");
+    addr_broadcast.sin_addr.s_addr = inet_addr("255.255.255.255"); // Broadcast général
 
     printf("Thread broadcast_sender actif. Ecoute sur le port %d...\n", PY_TO_C_PORT);
     while (1) {
@@ -72,21 +72,22 @@ DWORD WINAPI broadcast_sender(LPVOID arg) {
     return 0;
 }
 
+
 DWORD WINAPI forwarder(LPVOID arg) {
     SOCKET sock_broadcast = INVALID_SOCKET, sock_forward = INVALID_SOCKET;
     struct sockaddr_in addr_broadcast, addr_forward, addr_src;
     char buffer[BUFFER_SIZE];
     int addr_len = sizeof(addr_src);
 
-    // Structure pour stocker les derniers messages traités (éviter les duplications)
-    #define MAX_HISTORY 32
-    struct {
-        struct sockaddr_in source;
-        DWORD timestamp;
-        unsigned int hash;
-    } message_history[MAX_HISTORY];
-    int history_index = 0;
-    memset(message_history, 0, sizeof(message_history));
+    // Récupérer l'IP locale
+    char localHostname[256];
+    char localIP[INET_ADDRSTRLEN] = "";
+    if (gethostname(localHostname, sizeof(localHostname)) == 0) {
+        struct hostent *host = gethostbyname(localHostname);
+        if (host && host->h_addr_list[0]) {
+            inet_ntop(AF_INET, host->h_addr_list[0], localIP, sizeof(localIP));
+        }
+    }
 
     // Socket pour recevoir les broadcasts
     sock_broadcast = socket(AF_INET, SOCK_DGRAM, 0);
@@ -126,39 +127,17 @@ DWORD WINAPI forwarder(LPVOID arg) {
     while (1) {
         int recv_len = recvfrom(sock_broadcast, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&addr_src, &addr_len);
         if (recv_len > 0) {
-            // Calculer un hash simple du message pour l'identifier
-            unsigned int msg_hash = 0;
-            for (int i = 0; i < recv_len; i++) {
-                msg_hash = msg_hash * 31 + buffer[i];
+            // Vérifier si le message provient de la machine locale
+            char *src_ip = inet_ntoa(addr_src.sin_addr);
+            if (strcmp(src_ip, localIP) == 0) {
+                // Le message provient de nous-même, ne pas le forwarder
+                continue;
             }
-            
-            // Vérifier si on a déjà traité ce message récemment
-            DWORD current_time = GetTickCount();
-            BOOL is_duplicate = FALSE;
-            for (int i = 0; i < MAX_HISTORY; i++) {
-                // Vérifier si le message est récent (moins de 500ms) et a le même hash
-                if (current_time - message_history[i].timestamp < 500 && 
-                    message_history[i].hash == msg_hash &&
-                    message_history[i].source.sin_addr.s_addr == addr_src.sin_addr.s_addr) {
-                    is_duplicate = TRUE;
-                    break;
-                }
-            }
-            
-            if (!is_duplicate) {
-                // Enregistrer ce message dans l'historique
-                message_history[history_index].source = addr_src;
-                message_history[history_index].timestamp = current_time;
-                message_history[history_index].hash = msg_hash;
-                history_index = (history_index + 1) % MAX_HISTORY;
-                
-                // Transmettre à Python
-                if (sendto(sock_forward, buffer, recv_len, 0, (struct sockaddr *)&addr_forward, sizeof(addr_forward)) == SOCKET_ERROR) {
-                    printf("Erreur lors du forwarding vers Python: %d\n", WSAGetLastError());
-                } else {
-                    printf("Message broadcast reçu de %s:%d et transmis à Python.\n",
-                           inet_ntoa(addr_src.sin_addr), ntohs(addr_src.sin_port));
-                }
+            if (sendto(sock_forward, buffer, recv_len, 0, (struct sockaddr *)&addr_forward, sizeof(addr_forward)) == SOCKET_ERROR) {
+                printf("Erreur lors du forwarding vers Python: %d\n", WSAGetLastError());
+            } else {
+                printf("Message broadcast reçu de %s:%d et transmis à Python.\n",
+                       src_ip, ntohs(addr_src.sin_port));
             }
         }
     }
