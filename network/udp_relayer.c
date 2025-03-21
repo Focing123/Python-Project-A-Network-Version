@@ -9,7 +9,8 @@
 #pragma comment(lib, "Ws2_32.lib")
 
 #define PY_TO_C_PORT 6000      // Port d'écoute pour les messages venant de Python
-#define BROADCAST_PORT 6001    // Port pour le broadcast UDP
+#define BROADCAST_SEND_PORT 6001    // Port pour l'envoi du broadcast UDP
+#define BROADCAST_RECV_PORT 6003    // Port pour recevoir les broadcasts
 #define C_TO_PY_PORT 6002      // Port de transfert vers Python locale
 #define BUFFER_SIZE 65507
 
@@ -53,7 +54,7 @@ DWORD WINAPI broadcast_sender(LPVOID arg) {
     
     memset(&addr_broadcast, 0, sizeof(addr_broadcast));
     addr_broadcast.sin_family = AF_INET;
-    addr_broadcast.sin_port = htons(BROADCAST_PORT);
+    addr_broadcast.sin_port = htons(BROADCAST_SEND_PORT);
     addr_broadcast.sin_addr.s_addr = inet_addr("255.255.255.255"); // Broadcast général
 
     printf("Thread broadcast_sender actif. Ecoute sur le port %d...\n", PY_TO_C_PORT);
@@ -104,7 +105,7 @@ DWORD WINAPI forwarder(LPVOID arg) {
     memset(&addr_broadcast, 0, sizeof(addr_broadcast));
     addr_broadcast.sin_family = AF_INET;
     addr_broadcast.sin_addr.s_addr = INADDR_ANY;
-    addr_broadcast.sin_port = htons(BROADCAST_PORT);
+    addr_broadcast.sin_port = htons(BROADCAST_RECV_PORT);
     if (bind(sock_broadcast, (struct sockaddr *)&addr_broadcast, sizeof(addr_broadcast)) == SOCKET_ERROR) {
         printf("Erreur lors du bind du socket broadcast (recep): %d\n", WSAGetLastError());
         closesocket(sock_broadcast);
@@ -123,7 +124,7 @@ DWORD WINAPI forwarder(LPVOID arg) {
     addr_forward.sin_port = htons(C_TO_PY_PORT);
     addr_forward.sin_addr.s_addr = inet_addr("127.0.0.1");
 
-    printf("Thread forwarder actif. Ecoute des broadcasts sur le port %d...\n", BROADCAST_PORT);
+    printf("Thread forwarder actif. Ecoute des broadcasts sur le port %d...\n", BROADCAST_RECV_PORT);
     while (1) {
         int recv_len = recvfrom(sock_broadcast, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&addr_src, &addr_len);
         if (recv_len > 0) {
