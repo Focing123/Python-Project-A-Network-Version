@@ -62,8 +62,8 @@ DWORD WINAPI broadcast_sender(LPVOID arg) {
     memset(&addr_broadcast, 0, sizeof(addr_broadcast));
     addr_broadcast.sin_family = AF_INET;
     addr_broadcast.sin_port = htons(BROADCAST_PORT);
-    // Adaptation : utiliser le broadcast correspondant à l'interface Wi-Fi (pour 172.20.10.0/28, broadcast=172.20.10.15)
-    addr_broadcast.sin_addr.s_addr = inet_addr("172.20.10.15");
+    // Use standard broadcast address instead of hardcoded one
+    addr_broadcast.sin_addr.s_addr = inet_addr("255.255.255.255");
 
     printf("Thread broadcast_sender actif. Ecoute sur le port %d...\n", PY_TO_C_PORT);
     while (1) {
@@ -160,8 +160,15 @@ DWORD WINAPI forwarder(LPVOID arg) {
             continue;
         }
         if (recv_len > 0) {
-            // Vérifier si le message provient de la machine locale
+            // Get source IP
             char *src_ip = inet_ntoa(addr_src.sin_addr);
+            
+            // Skip if the message came from our own machine
+            if (strcmp(src_ip, localIP) == 0) {
+                printf("Skipping message from own machine\n");
+                continue;
+            }
+            
             if (sendto(sock_forward, buffer, recv_len, 0, (struct sockaddr *)&addr_forward, sizeof(addr_forward)) == SOCKET_ERROR) {
                 printf("Erreur lors du forwarding vers Python: %d\n", WSAGetLastError());
             } else {
