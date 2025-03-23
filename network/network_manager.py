@@ -55,7 +55,6 @@ class NetworkManager:
         debug_print("handle_incoming_discovery: découverte des pairs désactivée en mode relais C.")
 
     def send_game_state(self, game_state, nature='data'):
-        """Envoie l'état du jeu vers le programme C via UDP (port non-broadcast)."""
         try:
             map_state = game_state.map.get_state()
         except AttributeError:
@@ -109,8 +108,13 @@ class NetworkManager:
         json_payload = json.dumps(state)
         try:
             # Envoie vers le programme C en local (pas de broadcast ici)
-            self.send_socket.sendto(json_payload.encode("utf-8"), ("127.0.0.1", PY_TO_C_PORT))
-            debug_print("État du jeu envoyé au programme C.")
+            if self.is_server:
+                # Le serveur envoie normalement
+                self.send_socket.sendto(json_payload.encode("utf-8"), ("127.0.0.1", PY_TO_C_PORT))
+            else:
+                # Les clients doivent aussi envoyer
+                self.send_socket.sendto(json_payload.encode("utf-8"), ("127.0.0.1", PY_TO_C_PORT))
+            debug_print(f"État du jeu envoyé au programme C. Role: {'serveur' if self.is_server else 'client'}")
         except socket.error as e:
             debug_print(f"Erreur lors de l'envoi UDP vers le programme C: {e}")
 

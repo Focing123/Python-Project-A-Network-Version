@@ -393,10 +393,11 @@ class GameEngine:
     def send_multiplayer_state(self):
         """Envoie l'état du jeu via le gestionnaire réseau"""
         if self.network_manager:
+            # Tous les joueurs doivent envoyer leur état
+            self.network_manager.send_game_state(self, nature='data')
+            # Seul le serveur gère la découverte
             if self.network_manager.is_server:
                 self.network_manager.handle_incoming_discovery()
-            # On envoie toujours l'état du jeu en mode 'data'
-            self.network_manager.send_game_state(self, nature='data')
 
 
     def __del__(self):
