@@ -12,9 +12,8 @@ PY_TO_C_PORT = 6000      # Port où le process C reçoit les données venant du 
 C_TO_PY_PORT = 6002      # Port où le process C envoie les données (forwarded broadcast) au Python
 
 class NetworkManager:
-    def __init__(self, peer_to_peer=False, is_server=True):
+    def __init__(self, peer_to_peer=False):
         self.peer_to_peer = peer_to_peer
-        self.is_server = is_server  # Définition de l'attribut is_server
         # Socket pour envoyer les données vers le programme C
         self.send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         # Socket pour recevoir les messages du programme C
@@ -39,21 +38,6 @@ class NetworkManager:
         finally:
             s.close()
         return ip
-
-    def validate_peers(self):
-        """Validation des pairs désactivée en mode relais C."""
-        debug_print("Validation des pairs désactivée en mode relais C.")
-            
-    def run_peer_discovery(self, timeout=5):
-        """La découverte des pairs est désactivée en mode relais C."""
-        debug_print("La découverte des pairs est désactivée en mode relais C.")
-        return True
-
-    def handle_incoming_discovery(self):
-        """Traite en boucle les demandes de découverte entrantes.
-        La découverte des pairs est désactivée en mode relais C."""
-        debug_print("handle_incoming_discovery: découverte des pairs désactivée en mode relais C.")
-
     def send_game_state(self, game_state, nature='data'):
         try:
             map_state = game_state.map.get_state()
@@ -108,13 +92,7 @@ class NetworkManager:
         json_payload = json.dumps(state)
         try:
             # Envoie vers le programme C en local (pas de broadcast ici)
-            if self.is_server:
-                # Le serveur envoie normalement
-                self.send_socket.sendto(json_payload.encode("utf-8"), ("127.0.0.1", PY_TO_C_PORT))
-            else:
-                # Les clients doivent aussi envoyer
-                self.send_socket.sendto(json_payload.encode("utf-8"), ("127.0.0.1", PY_TO_C_PORT))
-            debug_print(f"État du jeu envoyé au programme C. Role: {'serveur' if self.is_server else 'client'}")
+            self.send_socket.sendto(json_payload.encode("utf-8"), ("127.0.0.1", PY_TO_C_PORT))
         except socket.error as e:
             debug_print(f"Erreur lors de l'envoi UDP vers le programme C: {e}")
 
