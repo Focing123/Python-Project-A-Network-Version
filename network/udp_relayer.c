@@ -13,6 +13,31 @@
 #define C_TO_PY_PORT 6002
 #define BUFFER_SIZE 65507
 
+// Fonction pour recevoir tous les fragments d'un message
+int receiveComplete(SOCKET sock, char* buffer, int maxSize, struct sockaddr* from, int* fromlen) {
+    int total = 0;
+    int tries = 0;
+    const int MAX_TRIES = 10;
+    
+    while (tries < MAX_TRIES) {
+        int received = recvfrom(sock, buffer + total, maxSize - total, 0, from, fromlen);
+        if (received == SOCKET_ERROR) {
+            if (WSAGetLastError() == WSAEWOULDBLOCK) {
+                Sleep(10); // Attendre un peu avant de réessayer
+                tries++;
+                continue;
+            }
+            return SOCKET_ERROR;
+        }
+        total += received;
+        if (received < (maxSize - total)) { // Si on reçoit moins que la taille max, c'est probablement la fin
+            break;
+        }
+        tries++;
+    }
+    return total;
+}
+
 int main() {
     WSADATA wsaData;
     SOCKET sock_recv, sock_broadcast, sock_forward;
@@ -98,6 +123,12 @@ int main() {
     addr_forward.sin_port = htons(C_TO_PY_PORT);
     addr_forward.sin_addr.s_addr = inet_addr("127.0.0.1");
 
+    // Configuration des sockets en mode non-bloquant
+    u_long mode = 1;
+    ioctlsocket(sock_recv, FIONBIO, &mode);
+    ioctlsocket(sock_forward, FIONBIO, &mode);
+    ioctlsocket(sock_broadcast, FIONBIO, &mode);
+
     printf("Relais UDP actif.\n");
 
     FD_ZERO(&readfds);
@@ -105,27 +136,47 @@ int main() {
     FD_SET(sock_forward, &readfds);
 
     while (1) {
-        fd_set temp_fds = readfds;
-        int activity = select(0, &temp_fds, NULL, NULL, NULL);
-
-        if (activity == SOCKET_ERROR) {
-            printf("Erreur select: %d\n", WSAGetLastError());
-            break;
-        }
-
-        if (FD_ISSET(sock_recv, &temp_fds)) {
-            int recv_len = recvfrom(sock_recv, buffer, BUFFER_SIZE, 0, (struct sockaddr*)&addr_src, &addr_len);
-            if (recv_len > 0) {
-                sendto(sock_broadcast, buffer, recv_len, 0, (struct sockaddr*)&addr_broadcast_send, sizeof(addr_broadcast_send));
+        // Traitement des messages depuis Python
+        int recv_len = receiveComplete(sock_recv, buffer, BUFFER_SIZE, (struct sockaddr*)&addr_src, &addr_len);
+        if (recv_len > 0) {
+            printf("Reçu %d octets depuis Python\n", recv_len);
+            // Envoyer en plusieurs fois si nécessaire
+            int sent = 0;
+            while (sent < recv_len) {
+                int chunk_size = min(16384, recv_len - sent); // Maximum 16KB par envoi
+                int result = sendto(sock_broadcast, buffer + sent, chunk_size, 0, 
+                                 (struct sockaddr*)&addr_broadcast_send, 
+                                 sizeof(addr_broadcast_send));
+                if (result == SOCKET_ERROR) {
+                    printf("Erreur d'envoi broadcast: %d\n", WSAGetLastError());
+                    break;
+                }
+                sent += result;
+                Sleep(1); // Petit délai entre les envois
             }
         }
 
-        if (FD_ISSET(sock_forward, &temp_fds)) {
-            int recv_len = recvfrom(sock_forward, buffer, BUFFER_SIZE, 0, (struct sockaddr*)&addr_src, &addr_len);
-            if (recv_len > 0) {
-                sendto(sock_forward, buffer, recv_len, 0, (struct sockaddr*)&addr_forward, sizeof(addr_forward));
+        // Traitement des messages broadcast
+        recv_len = receiveComplete(sock_forward, buffer, BUFFER_SIZE, (struct sockaddr*)&addr_src, &addr_len);
+        if (recv_len > 0) {
+            printf("Reçu %d octets en broadcast\n", recv_len);
+            // Forward vers Python
+            int sent = 0;
+            while (sent < recv_len) {
+                int chunk_size = min(16384, recv_len - sent);
+                int result = sendto(sock_forward, buffer + sent, chunk_size, 0,
+                                 (struct sockaddr*)&addr_forward,
+                                 sizeof(addr_forward));
+                if (result == SOCKET_ERROR) {
+                    printf("Erreur d'envoi vers Python: %d\n", WSAGetLastError());
+                    break;
+                }
+                sent += result;
+                Sleep(1);
             }
         }
+
+        Sleep(1); // Éviter une utilisation CPU excessive
     }
 
     closesocket(sock_recv);
