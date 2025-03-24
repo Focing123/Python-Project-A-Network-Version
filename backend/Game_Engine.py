@@ -44,22 +44,6 @@ class GameEngine:
         self.map = Map(*map_size)
         if self.network:
             self.network_manager.local_map = self.map
-        else:
-            # Attendre l'état initial de la carte en provenance du serveur
-            self.map = None
-            while not self.map:
-                if self.network_manager:
-                    state = self.network_manager.receive_game_state()
-                    if state and 'map' in state:
-                        if state['map'] and state['width'] and state['height']:
-                            self.map = Map(state['width'], state['height'])
-                            self.map.initialize_from_state(state['map'])
-                            self.network_manager.local_map = self.map  # Mettre à jour la carte du gestionnaire réseau
-                        else:
-                            raise ValueError("Invalid map state received from other")
-                        break
-            if not self.map:
-                raise Exception("Failed to receive initial map state from other")
         
         self.turn = 0
         self.is_paused = False  # Flag pour vérifier si le jeu est en pause
@@ -86,7 +70,7 @@ class GameEngine:
         self.gui_thread = None
 
         self.last_state_update = 0
-        self.state_update_interval = 2  # Intervalle de mise à jour en secondes
+        self.state_update_interval = 0.1  # Intervalle de mise à jour en secondes
 
     def start_gui_thread(self):
         """Initialize and start the GUI thread"""
