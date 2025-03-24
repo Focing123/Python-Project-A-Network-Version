@@ -152,7 +152,7 @@ class Building:
 # TownCenter Class
 class TownCenter(Building):
     def __init__(self, player):
-        super().__init__(player, "Town Center", hp=1000, build_time=15 / Building.global_speed, cost={"Wood": 350}, size=4)
+        super().__init__(player, "TownCenter", hp=1000, build_time=15 / Building.global_speed, cost={"Wood": 350}, size=4)
         self.symbol = 'T'
         self.population_increase = 5
         self.training_queue = []
@@ -277,7 +277,7 @@ class Stable(Building):
 # ArcheryRange Class
 class ArcheryRange(Building):
     def __init__(self, player):
-        super().__init__(player, "Archery Range", hp=500, build_time=50 / Building.global_speed, cost={"Wood": 175}, size=3)
+        super().__init__(player, "ArcheryRange", hp=500, build_time=50 / Building.global_speed, cost={"Wood": 175}, size=3)
         self.symbol = 'A'
         self.training_queue = []
         self.sprite = "archeryrange"

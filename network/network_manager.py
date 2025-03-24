@@ -337,14 +337,28 @@ class NetworkManager:
                     if not existing_building:
                         # Créer et placer le nouveau bâtiment
                         building = None
-                        building_cls = globals().get(building_name)
+                        if building_name == "TownCenter":
+                            building_cls = TownCenter
+                        elif building_name == "Barracks":
+                            building_cls = Barracks
+                        elif building_name == "Stable":
+                            building_cls = Stable
+                        elif building_name == "ArcheryRange":
+                            building_cls = ArcheryRange
+                        elif building_name == "Farm":
+                            building_cls = Farm
+                        elif building_name == "House":
+                            building_cls = House
+                        elif building_name == "Keep":
+                            building_cls = Keep
+                        elif building_name == "Camp":
+                            building_cls = Camp
                         if building_cls:    
                             building = building_cls()
                         if building:
                             building.position = position
                             building.hp = hp
                             building.is_attacked = is_attacked
-                            building.player = f"Player {remote_player.id}"
                             # Utiliser la méthode place_building de la map
                             self.local_map.place_building(building, position[0], position[1])
                             print(f"Nouvelle construction {building_name} ajoutée dans la tile ({x}, {y}) pour le joueur {remote_player.name}.")
