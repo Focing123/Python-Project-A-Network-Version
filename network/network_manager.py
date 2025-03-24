@@ -8,7 +8,7 @@ from backend.logger import debug_print
 from frontend.Terrain import Gold, Wood  # Assurez-vous que le chemin d'import est correct
 from backend.Units import *
 from backend.Units import Villager, Swordsman, Horseman, Archer, Unit
-
+from backend.Building import Building 
 # Ports de communication avec le programme C
 PY_TO_C_PORT = 6000      # Port où le process C reçoit les données venant du Python
 C_TO_PY_PORT = 6002      # Port où le process C envoie les données (forwarded broadcast) au Python
@@ -170,7 +170,7 @@ class NetworkManager:
 
     def apply_state_to_game(self, payload, sender_addr=None):
         """Met à jour la map locale à partir du payload.
-        Les unités des joueurs distants sont recréées et mises à jour dans la map."""
+        Les unités et bâtiments des joueurs distants sont recréés et mis à jour dans la map."""
         map_state = payload.get("map", {})
         if self.local_map is not None:
             # MàJ des ressources
@@ -194,7 +194,7 @@ class NetworkManager:
                                 resource_obj.amount = amount
                                 self.local_map.grid[y][x].resource = resource_obj
 
-            # MàJ des joueurs et de leurs unités
+            # MàJ des joueurs, leurs unités et bâtiments
             players_state = payload.get("players", [])
             source_ip = payload.get("source_ip", sender_addr[0] if sender_addr else "unknown")
             
@@ -311,6 +311,58 @@ class NetworkManager:
                             debug_print(f"Nouvelle unité {unit_id} ajoutée dans la tile ({x}, {y}) pour le joueur {remote_player.name}.")
                             debug_print(f"GGGGGGGGGGGGGGGGGGGGGGG {self.remote_players}")
                             debug_print(remote_player.units)
+
+                # Gestion des bâtiments
+                buildings_state = player.get("buildings", [])
+                existing_building_positions = set()
+                
+                # Nettoyer les bâtiments qui n'existent plus
+                buildings_to_remove = []
+                for building in remote_player.buildings:
+                    if any(b_state["position"] == building.position for b_state in buildings_state):
+                        existing_building_positions.add(building.position)
+                    else:
+                        buildings_to_remove.append(building)
+                        # Retirer le bâtiment de sa tile
+                        x, y = building.position
+                        if 0 <= y < len(self.local_map.grid) and 0 <= x < len(self.local_map.grid[y]):
+                            self.local_map.grid[y][x].building = None
+
+                # Supprimer les bâtiments qui n'existent plus
+                for building in buildings_to_remove:
+                    remote_player.buildings.remove(building)
+
+                # Mettre à jour ou créer les bâtiments
+                for building_state in buildings_state:
+                    pos = building_state.get("position")
+                    if not pos:
+                        continue
+
+                    x, y = pos
+                    if not (0 <= y < len(self.local_map.grid) and 0 <= x < len(self.local_map.grid[y])):
+                        continue
+
+                    # Vérifier si le bâtiment existe déjà à cette position
+                    existing_building = next((b for b in remote_player.buildings if b.position == pos), None)
+                    
+                    if existing_building:
+                        # Mettre à jour le bâtiment existant
+                        existing_building.hp = building_state.get("hp")
+                        existing_building.is_attacked = building_state.get("is_attacked", False)
+                    else:
+                        # Créer un nouveau bâtiment
+                        # Import the appropriate building class
+                        new_building = Building(
+                            name=building_state.get("name"),
+                            position=pos,
+                            player=remote_player
+                        )
+                        new_building.hp = building_state.get("hp")
+                        new_building.is_attacked = building_state.get("is_attacked", False)
+                        
+                        tile = self.local_map.grid[y][x]
+                        tile.building = new_building
+                        remote_player.buildings.append(new_building)
         
     def close(self):
         """Ferme les sockets réseau."""
@@ -321,6 +373,7 @@ class RemotePlayer:
     def __init__(self, addr, name=None):
         self.addr = addr
         self.units = {}
+        self.buildings = []  # Ajout de la liste des bâtiments
         if name is None:
             self.name = f"Remote-{addr[0]}:{addr[1]}"
         else:
