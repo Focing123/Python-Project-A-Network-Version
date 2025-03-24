@@ -29,7 +29,6 @@ class Building:
 
     def __str__(self):
         return self.symbol  # Ensure the building is represented by just the symbol
-    
     @classmethod
     def place_starting_buildings(cls, game_map, enemy_positions=None):
         print(enemy_positions)
@@ -42,7 +41,7 @@ class Building:
         radius = int(0.45 * min(game_map.width, game_map.height))
         angle_step = 360 // num_players
         
-        # Créer une liste de positions occupées
+        # Create a list of occupied positions
         occupied_positions = []
         if enemy_positions:
             occupied_positions.extend([pos["position"] for pos in enemy_positions if pos.get("position")])
@@ -51,14 +50,14 @@ class Building:
             angle = math.radians(i * angle_step)
             placed = False
             attempts = 0
-            max_attempts = 20  # Limite le nombre de tentatives pour éviter une boucle infinie
+            max_attempts = 20  # Limit the number of attempts to avoid infinite loops
             
             while not placed and attempts < max_attempts:
-                # Calculer une nouvelle position
+                # Calculate a new position
                 town_center_x = map_center_x + int(radius * math.cos(angle))
                 town_center_y = map_center_y + int(radius * math.sin(angle))
                 
-                # Vérifier si la position est libre et suffisamment éloignée des autres joueurs
+                # Check if the position is free and sufficiently far from other players
                 position_valid = (
                     game_map.is_area_free(town_center_x, town_center_y, TownCenter(player).size) and
                     all(math.dist((town_center_x, town_center_y), pos) >= 10 
@@ -66,15 +65,15 @@ class Building:
                 )
                 
                 if position_valid:
-                    # Placer le bâtiment
+                    # Place the building
                     building_instance = TownCenter(player)
                     player.ai.decided_builds.append((town_center_x, town_center_y, TownCenter(player).size))
-                    building_instance.spawn_building(player, town_center_x, town_center_y, TownCenter, game_map)
+                    cls.spawn_building(player, town_center_x, town_center_y, TownCenter, game_map)
                     player.position = (town_center_x, town_center_y)
                     occupied_positions.append((town_center_x, town_center_y))
                     placed = True
                     
-                    # Gérer les bâtiments supplémentaires pour la civilisation Marines
+                    # Handle additional buildings for the "Marines" civilization
                     if player.civilization == "Marines":
                         marine_buildings = [
                             (TownCenter, 5, 0), (TownCenter, -5, 0), 
@@ -93,14 +92,14 @@ class Building:
 
                             # Spawn the building with the map passed in
                             player.ai.decided_builds.append((new_x, new_y, building(player).size))
-                            building_instance.spawn_building(player, new_x, new_y, building, game_map)
+                            cls.spawn_building(player, new_x, new_y, building, game_map)
 
                         debug_print(f"Placed additional buildings for {player.name} (Marines) around ({town_center_x}, {town_center_y})", 'Blue')
                     
                 else:
-                    # Ajuster l'angle et le rayon si la position n'est pas valide
+                    # Adjust the angle and radius if the position is not valid
                     angle = (angle + math.pi/4) % (2 * math.pi)
-                    radius = radius * (0.9 + random.random() * 0.2)  # Varier légèrement le rayon
+                    radius = radius * (0.9 + random.random() * 0.2)  # Slightly vary the radius
                     attempts += 1
             
             if not placed:
