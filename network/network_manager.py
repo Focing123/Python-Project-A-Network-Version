@@ -159,6 +159,7 @@ class NetworkManager:
                         payload = pickle.loads(decompressed_data)
                         
                         if payload.get("type") == "game_data":
+                            print(payload["players_positions"])
                             self.apply_state_to_game(payload, sender_addr=addr)
                             return payload
                             
