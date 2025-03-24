@@ -75,9 +75,11 @@ class GameEngine:
         attempts = 0
         while attempts < 5:
             state = self.network_manager.receive_game_state()
-            if state and state['players_positions']:
-                self.networksplayers_positions = state['players_positions']
-                break
+            if state and isinstance(state, dict):  # Vérifier que state est un dictionnaire
+                # Utiliser get() pour éviter l'erreur KeyError
+                self.networksplayers_positions = state.get('players_positions')
+                if self.networksplayers_positions:  # Si on a reçu des positions
+                    break
             attempts += 1
             time.sleep(1)
 
