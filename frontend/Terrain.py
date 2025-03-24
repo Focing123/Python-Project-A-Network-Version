@@ -21,7 +21,7 @@ class Map:
 
     def generate_resources(self):
         
-        num_resources = int(self.width * self.height * 0.03)  # 3% of the map as resource tiles
+        num_resources = int(self.width * self.height * 0.02)  # 3% of the map as resource tiles
 
         # Gold Generation
         num_gold = int(num_resources * 0.3)  # 30% of resource tiles as gold
@@ -219,7 +219,7 @@ class Map:
             stdscr.addstr(0, 0, "┌", border_color)  # Top-left corner
             stdscr.addstr(0, viewport_width * 2 - 1, "┐", border_color)  # Top-right corner
             stdscr.addstr(viewport_height - 1, 0, "└", border_color)  # Bottom-left corner
-            stdscr.addstr(viewport_height - 1, viewport_width * 2 - 1, "┘", border_color)  # Bottom-right corner
+            stdscr.addstr(viewport_height - 1, viewport_width * 2 - 1, "┘", border_color)
 
         stdscr.refresh()
 
@@ -289,52 +289,34 @@ class Map:
 
     def get_state(self):
         """
-        Retourne un dictionnaire décrivant l'état de la map, incluant :
-          - La taille (width et height)
-          - La liste des ressources présentes sur le terrain, avec leurs coordonnées, type et quantité
+        Retourne un dictionnaire décrivant l'état de la map avec la structure :
+        {
+            "resources": {
+                "wood": [[x, y, amount], ...],
+                "gold": [[x, y, amount], ...]
+            }
+        }
         """
         state = {
-            "size": {"width": self.width, "height": self.height},
-            "resources": []
+            "resources": {
+                "wood": [],
+                "gold": []
+            }
         }
+        
         for y in range(self.height):
             for x in range(self.width):
                 tile = self.grid[y][x]
                 if tile.resource is not None:
-                    resource_state = {
-                        "type": tile.resource.type,
-                        "amount": tile.resource.amount,
-                        "coordinates": (x, y)
-                    }
-                    state["resources"].append(resource_state)
+                    resource_type = tile.resource.type.lower()  # Convert to lowercase
+                    if resource_type in ["wood", "gold"]:
+                        state["resources"][resource_type].append([
+                            x, 
+                            y, 
+                            tile.resource.amount
+                        ])
+        
         return state
-
-    def initialize_from_state(self, state):
-        """Initialize the map from a network-received state"""
-        if not isinstance(state, dict):
-            raise ValueError("Invalid state format")
-
-        # Reset all tiles' resources to None
-        for y in range(self.height):
-            for x in range(self.width):
-                self.grid[y][x].resource = None
-
-        # Initialize resources from state
-        self.resources = {"Gold": [], "Wood": []}
-        for resource in state.get("resources", []):
-            x, y = resource["coordinates"]
-            resource_type = resource["type"]
-            
-            if resource_type == "Wood":
-                self.grid[y][x].resource = Wood()
-                self.resources["Wood"].append((x, y))
-            elif resource_type == "Gold":
-                self.grid[y][x].resource = Gold()
-                self.resources["Gold"].append((x, y))
-            
-            # Set the amount if it exists in the state
-            if "amount" in resource:
-                self.grid[y][x].resource.amount = resource["amount"]
 
 class Tile:
     def __init__(self, x, y):
