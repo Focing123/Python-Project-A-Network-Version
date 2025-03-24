@@ -64,11 +64,11 @@ class GameEngine:
                 if initial_state:
                     for player_state in initial_state.get("players", []):
                         for building in player_state.get("buildings", []):
-                            if building.get("position"):
+                            if building.get("name") == "Town Center" and building.get("position"):
                                 network_buildings.append(
-                                    (building["position"], building.get("player_id", "unknown"))
+                                    (building["position"], player_state.get("player_id", "unknown"))
                                 )
-                    debug_print(f"Received {len(network_buildings)} network buildings")
+                debug_print(f"Received {len(network_buildings)} Town Center positions from the network")
                 
             # Placement des bâtiments avec les informations réseau
             Building.place_starting_buildings(self.map, network_buildings)
