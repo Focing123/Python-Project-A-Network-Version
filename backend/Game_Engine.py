@@ -56,7 +56,8 @@ class GameEngine:
 
         # Attributs liés à la sauvegarde
         if not sauvegarde:
-            Building.place_starting_buildings(self.map)   # Placement des bâtiments de départ
+            print(self.network_manager.local_map.buildings)
+            Building.place_starting_buildings(self.map,self.network_manager.local_map.buildings)   # Placement des bâtiments de départ
             Unit.place_starting_units(self.players, self.map)  # Placement des unités de départ
         
         self.debug_print = debug_print

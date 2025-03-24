@@ -30,8 +30,12 @@ class Building:
     def __str__(self):
         return self.symbol  # Ensure the building is represented by just the symbol
     
-    @classmethod
-    def place_starting_buildings(cls, game_map):
+    @classmethod 
+    def place_starting_buildings(cls, game_map, network_buildings=None):
+        """
+        Place buildings for all players, taking into account network players' buildings
+        network_buildings: list of tuples (position, player_id) of network players' buildings
+        """
         total_players = len(players_list)
         map_center_x = game_map.width // 2
         map_center_y = game_map.height // 2
@@ -39,29 +43,48 @@ class Building:
         angle_step = 360 // total_players
         random.seed()
 
-        def try_opposite_position(x, y, angle, radius):
-            # Calculate opposite position on the circle
-            opposite_angle = angle + math.pi
-            new_x = map_center_x + int(radius * math.cos(opposite_angle))
-            new_y = map_center_y + int(radius * math.sin(opposite_angle))
-            return new_x, new_y
+        def try_opposite_position(x, y):
+            # Calculate opposite position relative to map center
+            dx = x - map_center_x
+            dy = y - map_center_y
+            opposite_x = map_center_x - dx
+            opposite_y = map_center_y - dy
+            return opposite_x, opposite_y
 
         for i, player in enumerate(players_list):
-            angle = math.radians(i * angle_step)
-            town_center_x = map_center_x + int(radius * math.cos(angle))
-            town_center_y = map_center_y + int(radius * math.sin(angle))
+            # Check if there's a network building to avoid
+            if network_buildings:
+                # Find closest network building position
+                closest_pos = None
+                min_distance = float('inf')
+                for pos, _ in network_buildings:
+                    dist = math.sqrt((map_center_x - pos[0])**2 + (map_center_y - pos[1])**2)
+                    if dist < min_distance:
+                        min_distance = dist
+                        closest_pos = pos
+                
+                if closest_pos:
+                    # Place at opposite position of network building
+                    town_center_x, town_center_y = try_opposite_position(*closest_pos)
+                else:
+                    # Regular placement if no network building found
+                    angle = math.radians(i * angle_step)
+                    town_center_x = map_center_x + int(radius * math.cos(angle))
+                    town_center_y = map_center_y + int(radius * math.sin(angle))
+            else:
+                # Regular placement if no network buildings
+                angle = math.radians(i * angle_step)
+                town_center_x = map_center_x + int(radius * math.cos(angle))
+                town_center_y = map_center_y + int(radius * math.sin(angle))
 
-            # Vérifier si la position est occupée par un visiteur réseau
+            # Ajuster la position si nécessaire
             attempt_count = 0
             while (not game_map.is_area_free(town_center_x, town_center_y, TownCenter(player).size) and 
-                   attempt_count < 4):  # Limiter les tentatives
-                if attempt_count == 0:
-                    # Essayer d'abord la position opposée
-                    town_center_x, town_center_y = try_opposite_position(town_center_x, town_center_y, angle, radius)
-                else:
-                    # Essayer des positions légèrement décalées
-                    town_center_x += random.choice([-2, 0, 2]) * attempt_count
-                    town_center_y += random.choice([-2, 0, 2]) * attempt_count
+                   attempt_count < 4):
+                # Essayer des positions légèrement décalées
+                offset = (attempt_count + 1) * 2
+                town_center_x += random.choice([-offset, offset])
+                town_center_y += random.choice([-offset, offset])
                 attempt_count += 1
 
             if game_map.is_area_free(town_center_x, town_center_y, TownCenter(player).size):
@@ -69,7 +92,7 @@ class Building:
                 player.ai.decided_builds.append((town_center_x, town_center_y, TownCenter(player).size))
                 building_instance.spawn_building(player, town_center_x, town_center_y, TownCenter, game_map)
 
-                # Pour la civilisation Marines
+                # Pour la civilisation Marines, même logique pour les bâtiments additionnels
                 if player.civilization == "Marines":
                     marine_buildings = [
                         (TownCenter, 5, 0), (TownCenter, -5, 0),
