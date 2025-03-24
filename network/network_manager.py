@@ -91,6 +91,10 @@ class NetworkManager:
             "width": getattr(game_state.map, "width", 0),
             "height": getattr(game_state.map, "height", 0),
             "players": players_state,
+            "players_positions": [
+                {"name": player.name, "position": player.position}
+                for player in game_state.players
+            ],
             "actions": [],
             "source_ip": self.local_ip  # Ajout de l'IP source
         }

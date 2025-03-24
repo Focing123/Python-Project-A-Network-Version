@@ -50,6 +50,7 @@ class GameEngine:
             while not self.map:
                 if self.network_manager:
                     state = self.network_manager.receive_game_state()
+                    self.networksplayers_positions = state['players_positions']
                     if state and 'map' in state:
                         if state['map'] and state['width'] and state['height']:
                             self.map = Map(state['width'], state['height'])
@@ -73,9 +74,16 @@ class GameEngine:
 
         # Attributs liés à la sauvegarde
         if not sauvegarde:
-            Building.place_starting_buildings(self.map)   # Placement des bâtiments de départ
+            if not self.network :
+                Building.place_starting_buildings(self.map)   # Placement des bâtiments de départ
+            else:
+                # Ensure networksplayers_positions is initialized before using it
+                if self.networksplayers_positions is not None:
+                    Building.place_starting_buildings(self.map, enemy_positions=self.networksplayers_positions)
+                else:
+                    debug_print("Erreur: positions des joueurs non initialisées")
             Unit.place_starting_units(self.players, self.map)  # Placement des unités de départ
-        
+
         self.debug_print = debug_print
         self.current_time = time.time()
         self.terminalon = True

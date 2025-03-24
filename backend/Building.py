@@ -31,8 +31,9 @@ class Building:
         return self.symbol  # Ensure the building is represented by just the symbol
     
     @classmethod
-    def place_starting_buildings(cls, game_map):
-        num_players = len(players_list)
+    def place_starting_buildings(cls, game_map, enemy_positions=None):
+        print(enemy_positions)
+        num_players = (len(players_list) + len(enemy_positions)) if enemy_positions else len(players_list)
         map_center_x = game_map.width // 2
         map_center_y = game_map.height // 2
         radius = int(0.45 * min(game_map.width, game_map.height))  # 90% of half the map size
@@ -40,15 +41,25 @@ class Building:
         angle_step = 360 // num_players  # Equal angular distance between town centers
         random.seed()  # Explicitly seed the random number generator
 
+        # Extract enemy positions if provided
+        enemy_positions = enemy_positions or []
+
         for i, player in enumerate(players_list):
             angle = math.radians(i * angle_step)
             town_center_x = map_center_x + int(radius * math.cos(angle))
             town_center_y = map_center_y + int(radius * math.sin(angle))
 
-            # Adjust the location if tile is not free
-            while not game_map.is_area_free(town_center_x, town_center_y, TownCenter(player).size):
-                town_center_x += random.choice([-1, 0, 1])
-                town_center_y += random.choice([-1, 0, 1])
+            # Adjust the location if tile is not free or too close to enemy positions
+            while not game_map.is_area_free(town_center_x, town_center_y, TownCenter(player).size) or \
+                  any(math.dist((town_center_x, town_center_y), enemy["position"]) < 10 for enemy in enemy_positions):
+                # If too close to an enemy, reposition to the opposite side of the map
+                if any(math.dist((town_center_x, town_center_y), enemy["position"]) < 10 for enemy in enemy_positions):
+                    angle = (angle + math.pi) % (2 * math.pi)  # Move to the opposite angle
+                    town_center_x = map_center_x + int(radius * math.cos(angle))
+                    town_center_y = map_center_y + int(radius * math.sin(angle))
+                else:
+                    town_center_x += random.choice([-1, 0, 1])
+                    town_center_y += random.choice([-1, 0, 1])
 
             if game_map.is_area_free(town_center_x, town_center_y, TownCenter(player).size):
                 # Create an instance of Building (or TownCenter) to call spawn_building
@@ -56,6 +67,8 @@ class Building:
                 player.ai.decided_builds.append((town_center_x, town_center_y, TownCenter(player).size))
                 building_instance.spawn_building(player, town_center_x, town_center_y, TownCenter, game_map)
 
+                player.position = (town_center_x, town_center_y)
+                
                 # Check if the civilization is Marines
                 if player.civilization == "Marines":
                     marine_buildings = [
