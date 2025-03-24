@@ -75,14 +75,9 @@ class GameEngine:
         attempts = 0
         while attempts < 20:
             state = self.network_manager.receive_game_state()
-            print(attempts,state)
-            if state and 'players_positions' in state:
-                if state['players_positions']:
-                    self.networksplayers_positions = state['players_positions']
-                    print("Players positions received")
-                else :
-                    self.networksplayers_positions = None
-                    print("No players positions received")
+            if state and 'players_positions' in state and state['players_positions'] is not None:
+                self.networksplayers_positions = state['players_positions']
+                print("Players positions received")
                 break
             attempts += 1
 
@@ -98,6 +93,9 @@ class GameEngine:
                     Building.place_starting_buildings(self.map)
 
             Unit.place_starting_units(self.players, self.map)  # Placement des unités de départ
+
+        for player in self.players:
+            print(player.position)
 
         self.debug_print = debug_print
         self.current_time = time.time()
