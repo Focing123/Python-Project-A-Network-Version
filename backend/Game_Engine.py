@@ -73,10 +73,10 @@ class GameEngine:
         self.IA_used = False
 
         attempts = 0
-        while attempts < 20:
-            state = self.network_manager.receive_game_state()
-            if state and 'players_positions' in state and state['players_positions'] is not None:
-                self.networksplayers_positions = state['players_positions']
+        while attempts < 10:
+            state = self.network_manager.receive_game_state(timeout=1)
+            if state["players_positions"] is not None:
+                self.networksplayers_positions = state["players_positions"]
                 print("Players positions received")
                 break
             attempts += 1
