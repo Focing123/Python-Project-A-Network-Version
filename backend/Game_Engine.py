@@ -76,11 +76,10 @@ class GameEngine:
         while attempts < 10:
             state = self.network_manager.receive_game_state()
             print(attempts,state)
-            if state and state['players_positions']:
+            if state and 'players_positions' in state:
                 self.networksplayers_positions = state['players_positions']
                 break
             attempts += 1
-            print("attempts ... ",attempts)
 
         # Attributs liés à la sauvegarde
         if not sauvegarde:
@@ -92,6 +91,7 @@ class GameEngine:
                     Building.place_starting_buildings(self.map, enemy_positions=self.networksplayers_positions)
                 else:
                     Building.place_starting_buildings(self.map)
+
             Unit.place_starting_units(self.players, self.map)  # Placement des unités de départ
 
         self.debug_print = debug_print
