@@ -4,7 +4,6 @@ import pickle
 import os
 import tkinter as tk
 import socket
-import json
 
 from queue import Queue
 from frontend.gui import GUI
@@ -86,7 +85,7 @@ class GameEngine:
         self.gui_thread = None
 
         self.last_state_update = 0
-        self.state_update_interval = 2  # Intervalle de mise à jour en secondes
+        self.state_update_interval = 0.1  # Intervalle de mise à jour en secondes
 
     def start_gui_thread(self):
         """Initialize and start the GUI thread"""
