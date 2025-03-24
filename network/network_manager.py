@@ -166,6 +166,13 @@ class NetworkManager:
 
     def apply_state_to_game(self, payload, sender_addr=None):
         """Met à jour la map locale à partir du payload."""
+        source_ip = payload.get("source_ip", sender_addr[0] if sender_addr else "unknown")
+        
+        # Ne pas appliquer les données reçues de sa propre IP
+        if source_ip == self.local_ip:
+            debug_print(f"Ignoré les données reçues de l'IP locale: {source_ip}")
+            return
+
         map_state = payload.get("map", {})
         if self.local_map is not None:
             # MàJ des ressources
@@ -195,7 +202,6 @@ class NetworkManager:
 
             # MàJ des joueurs et de leurs unités
             players_state = payload.get("players", [])
-            source_ip = payload.get("source_ip", sender_addr[0] if sender_addr else "unknown")
             
             for player in players_state:
                 # Utiliser l'IP source comme identifiant unique
