@@ -80,8 +80,6 @@ class GameEngine:
                 break
             attempts += 1
             time.sleep(1)
-        else :
-            print("Failed to receive initial players positions from other")
 
         # Attributs liés à la sauvegarde
         if not sauvegarde:
