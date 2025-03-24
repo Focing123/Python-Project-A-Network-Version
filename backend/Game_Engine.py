@@ -33,6 +33,10 @@ class GameEngine:
         self.map_size = map_size
         self.players = players
         self.visitors = []
+
+        # Initialize the map first
+        self.map = Map(*map_size)
+
         # Initialisation du gestionnaire réseau
         if self.network:
             self.network_manager = NetworkManager(peer_to_peer=self.network)
@@ -41,11 +45,6 @@ class GameEngine:
         else:
             self.network_manager = None
 
-        # Initialization de la carte en fonction du rôle réseau : le serveur initialise la carte, le client attend son état
-        self.map = Map(*map_size)
-        if self.network:
-            self.network_manager.local_map = self.map
-        
         self.turn = 0
         self.is_paused = False  # Flag pour vérifier si le jeu est en pause
         self.changed_tiles = set()  # Ensemble des tuiles modifiées
