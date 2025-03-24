@@ -33,68 +33,78 @@ class Building:
     @classmethod
     def place_starting_buildings(cls, game_map, enemy_positions=None):
         print(enemy_positions)
-        num_players = (len(players_list) + len(enemy_positions)) if enemy_positions else len(players_list)
+        num_players = len(players_list)
+        if enemy_positions:
+            num_players += len(enemy_positions)
+            
         map_center_x = game_map.width // 2
         map_center_y = game_map.height // 2
-        radius = int(0.45 * min(game_map.width, game_map.height))  # 90% of half the map size
-    
-        angle_step = 360 // num_players  # Equal angular distance between town centers
-        random.seed()  # Explicitly seed the random number generator
-
-        # Extract enemy positions if provided
-        enemy_positions = enemy_positions or []
-
+        radius = int(0.45 * min(game_map.width, game_map.height))
+        angle_step = 360 // num_players
+        
+        # Créer une liste de positions occupées
+        occupied_positions = []
+        if enemy_positions:
+            occupied_positions.extend([pos["position"] for pos in enemy_positions if pos.get("position")])
+        
         for i, player in enumerate(players_list):
             angle = math.radians(i * angle_step)
-            town_center_x = map_center_x + int(radius * math.cos(angle))
-            town_center_y = map_center_y + int(radius * math.sin(angle))
-
-            # Adjust the location if tile is not free or too close to enemy positions
-            while not game_map.is_area_free(town_center_x, town_center_y, TownCenter(player).size) or \
-                  any(math.dist((town_center_x, town_center_y), enemy["position"]) < 10 for enemy in enemy_positions):
-                # If too close to an enemy, reposition to the opposite side of the map
-                if any(math.dist((town_center_x, town_center_y), enemy["position"]) < 10 for enemy in enemy_positions):
-                    angle = (angle + math.pi) % (2 * math.pi)  # Move to the opposite angle
-                    town_center_x = map_center_x + int(radius * math.cos(angle))
-                    town_center_y = map_center_y + int(radius * math.sin(angle))
-                else:
-                    town_center_x += random.choice([-1, 0, 1])
-                    town_center_y += random.choice([-1, 0, 1])
-
-            if game_map.is_area_free(town_center_x, town_center_y, TownCenter(player).size):
-                # Create an instance of Building (or TownCenter) to call spawn_building
-                building_instance = TownCenter(player)
-                player.ai.decided_builds.append((town_center_x, town_center_y, TownCenter(player).size))
-                building_instance.spawn_building(player, town_center_x, town_center_y, TownCenter, game_map)
-
-                player.position = (town_center_x, town_center_y)
+            placed = False
+            attempts = 0
+            max_attempts = 20  # Limite le nombre de tentatives pour éviter une boucle infinie
+            
+            while not placed and attempts < max_attempts:
+                # Calculer une nouvelle position
+                town_center_x = map_center_x + int(radius * math.cos(angle))
+                town_center_y = map_center_y + int(radius * math.sin(angle))
                 
-                # Check if the civilization is Marines
-                if player.civilization == "Marines":
-                    marine_buildings = [
-                        (TownCenter, 5, 0), (TownCenter, -5, 0), 
-                        (Barracks, 10, 4), (Barracks, -9, -4), 
-                        (Stable, 10, -4), (Stable, -9, 4),
-                        (ArcheryRange, 13, 0), (ArcheryRange, -12, 0)
-                    ]
+                # Vérifier si la position est libre et suffisamment éloignée des autres joueurs
+                position_valid = (
+                    game_map.is_area_free(town_center_x, town_center_y, TownCenter(player).size) and
+                    all(math.dist((town_center_x, town_center_y), pos) >= 10 
+                        for pos in occupied_positions)
+                )
+                
+                if position_valid:
+                    # Placer le bâtiment
+                    building_instance = TownCenter(player)
+                    player.ai.decided_builds.append((town_center_x, town_center_y, TownCenter(player).size))
+                    building_instance.spawn_building(player, town_center_x, town_center_y, TownCenter, game_map)
+                    player.position = (town_center_x, town_center_y)
+                    occupied_positions.append((town_center_x, town_center_y))
+                    placed = True
+                    
+                    # Gérer les bâtiments supplémentaires pour la civilisation Marines
+                    if player.civilization == "Marines":
+                        marine_buildings = [
+                            (TownCenter, 5, 0), (TownCenter, -5, 0), 
+                            (Barracks, 10, 4), (Barracks, -9, -4), 
+                            (Stable, 10, -4), (Stable, -9, 4),
+                            (ArcheryRange, 13, 0), (ArcheryRange, -12, 0)
+                        ]
 
-                    for building, offset_x, offset_y in marine_buildings:
-                        new_x = town_center_x + offset_x
-                        new_y = town_center_y + offset_y
+                        for building, offset_x, offset_y in marine_buildings:
+                            new_x = town_center_x + offset_x
+                            new_y = town_center_y + offset_y
 
-                        while not game_map.is_area_free(new_x, new_y, building(player).size):
-                            new_x += random.choice([-1, 0, 1])
-                            new_y += random.choice([-1, 0, 1])
+                            while not game_map.is_area_free(new_x, new_y, building(player).size):
+                                new_x += random.choice([-1, 0, 1])
+                                new_y += random.choice([-1, 0, 1])
 
-                        # Spawn the building with the map passed in
-                        player.ai.decided_builds.append((new_x, new_y, building(player).size))
-                        building_instance.spawn_building(player, new_x, new_y, building, game_map)
+                            # Spawn the building with the map passed in
+                            player.ai.decided_builds.append((new_x, new_y, building(player).size))
+                            building_instance.spawn_building(player, new_x, new_y, building, game_map)
 
-                    debug_print(f"Placed additional buildings for {player.name} (Marines) around ({town_center_x}, {town_center_y})", 'Blue')
+                        debug_print(f"Placed additional buildings for {player.name} (Marines) around ({town_center_x}, {town_center_y})", 'Blue')
+                    
                 else:
-                    debug_print(f"{player.civilization} civilization does not have additional starting buildings.", 'Yellow')
-            else:
-                debug_print(f"Failed to place starting town center at ({town_center_x}, {town_center_y})", 'Yellow')
+                    # Ajuster l'angle et le rayon si la position n'est pas valide
+                    angle = (angle + math.pi/4) % (2 * math.pi)
+                    radius = radius * (0.9 + random.random() * 0.2)  # Varier légèrement le rayon
+                    attempts += 1
+            
+            if not placed:
+                debug_print(f"Warning: Could not place starting buildings for {player.name} after {max_attempts} attempts")
 
     @classmethod
     def spawn_building(self, player, x, y, building_class, game_map):

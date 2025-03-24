@@ -75,11 +75,12 @@ class GameEngine:
         attempts = 0
         while attempts < 5:
             state = self.network_manager.receive_game_state()
+            print(attempts,state)
             if state and 'players_positions' in state:
                 self.networksplayers_positions = state['players_positions']
             break
             attempts += 1
-            time.sleep(1)  # Wait for 1 second before retrying
+            time.sleep(1)  
         else:
             raise Exception("Failed to receive players' positions after 5 attempts")
 

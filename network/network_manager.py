@@ -27,6 +27,7 @@ class NetworkManager:
         # Récupérer l'IP réelle
         self.local_ip = self.get_local_ip()
         # les autres parties du code restent inchangées
+        self.player_positions = {}  # Nouveau dictionnaire pour stocker les positions des joueurs
         self.local_map = None
         self.remote_players = {}  # Dictionnaire: { addr: RemotePlayer }
 
@@ -310,7 +311,7 @@ class NetworkManager:
                             debug_print(f"Nouvelle unité {unit_id} ajoutée dans la tile ({x}, {y}) pour le joueur {remote_player.name}.")
                             debug_print(f"GGGGGGGGGGGGGGGGGGGGGGG {self.remote_players}")
                             debug_print(remote_player.units)
-
+        
     def close(self):
         """Ferme les sockets réseau."""
         self.send_socket.close()
