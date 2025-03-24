@@ -164,27 +164,30 @@ class NetworkManager:
         return None
 
     def apply_state_to_game(self, payload, sender_addr=None):
-        """Met à jour la map locale à partir du payload.
-        Les unités des joueurs distants sont recréées et mises à jour dans la map."""
+        """Met à jour la map locale à partir du payload."""
         map_state = payload.get("map", {})
         if self.local_map is not None:
             # MàJ des ressources
-            remote_resources = map_state.get("resources", [])
-            if not isinstance(remote_resources, list):
-                debug_print("Structure des resources invalide, attendu une liste.")
-                return
-            for resource in remote_resources:
-                res_type = resource.get("type")
-                x, y = resource.get("coordinates", (None, None))
-                amount = resource.get("amount")
-                if res_type and x is not None and y is not None:
-                    if res_type not in self.local_map.resources:
-                        self.local_map.resources[res_type] = []
-                    if (x, y) not in self.local_map.resources[res_type]:
-                        self.local_map.resources[res_type].append((x, y))
-                        debug_print(f"Nouvelle resource ajoutée de type {res_type} à ({x}, {y}) avec quantité {amount}.")
+            resources_state = map_state.get("resources", {})
+            # Traiter chaque type de ressource (wood et gold)
+            for resource_type, resources in resources_state.items():
+                resource_type = resource_type.capitalize()  # Convertir en "Wood" ou "Gold"
+                if not isinstance(resources, list):
+                    debug_print(f"Structure des resources invalide pour {resource_type}")
+                    continue
+                for resource_data in resources:
+                    if len(resource_data) != 3:
+                        continue  
+                    x, y, amount = resource_data
+                    # Vérifier si la ressource existe déjà à cette position
+                    if resource_type not in self.local_map.resources:
+                        self.local_map.resources[resource_type] = []
+                    if (x, y) not in self.local_map.resources[resource_type]:
+                        self.local_map.resources[resource_type].append((x, y))
+                        debug_print(f"Nouvelle ressource ajoutée de type {resource_type} à ({x}, {y}) avec quantité {amount}")
+                        # Créer et placer la ressource sur la grille
                         if y < len(self.local_map.grid) and x < len(self.local_map.grid[y]):
-                            resource_obj = Gold() if res_type == "Gold" else Wood() if res_type == "Wood" else None
+                            resource_obj = Gold() if resource_type == "Gold" else Wood() if resource_type == "Wood" else None
                             if resource_obj is not None:
                                 resource_obj.amount = amount
                                 self.local_map.grid[y][x].resource = resource_obj
