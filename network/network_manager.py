@@ -56,6 +56,7 @@ class NetworkManager:
                     "name": getattr(player, "name", "inconnu"),
                     "units": [
                         {
+                            'id': getattr(unit, "id", hash(f"{player.name}-{unit.__class__.__name__}-{unit.position}")),
                             'player': getattr(player, "name", None),
                             "class": unit.__class__.__name__,
                             "hp": getattr(unit, "hp", None),
@@ -209,10 +210,74 @@ class NetworkManager:
                     self.remote_players[player_key] = remote_player
 
                 units_state = player.get("units", [])
+                # Créer un set pour suivre les unités existantes
+                existing_unit_ids = set()
+                
+                # Nettoyer les unités qui n'existent plus
+                units_to_remove = []
+                for unit_id, unit in remote_player.units.items():
+                    if any(u_state.get("id") == unit_id for u_state in units_state):
+                        existing_unit_ids.add(unit_id)
+                    else:
+                        units_to_remove.append(unit_id)
+                        # Retirer l'unité de sa tile actuelle
+                        if hasattr(unit, "position"):
+                            x, y = unit.position
+                            if 0 <= y < len(self.local_map.grid) and 0 <= x < len(self.local_map.grid[y]):
+                                tile = self.local_map.grid[y][x]
+                                if hasattr(tile, "unit") and unit in tile.unit:
+                                    tile.unit.remove(unit)
+
+                # Supprimer les unités qui n'existent plus
+                for unit_id in units_to_remove:
+                    del remote_player.units[unit_id]
+
+                # Mettre à jour ou créer les unités
                 for unit_state in units_state:
+                    unit_id = unit_state.get("id")
+                    if unit_id is None:
+                        continue
+
                     pos = unit_state.get("position")
-                    if pos is not None:
-                        x, y = pos
+                    if pos is None:
+                        continue
+
+                    x, y = pos
+                    # Vérifier si l'unité existe déjà
+                    existing_unit = remote_player.units.get(unit_id)
+                    
+                    if existing_unit:
+                        # Mettre à jour l'unité existante
+                        old_pos = existing_unit.position
+                        if old_pos != tuple(pos):
+                            # Retirer l'unité de son ancienne position
+                            old_x, old_y = old_pos
+                            if 0 <= old_y < len(self.local_map.grid) and 0 <= old_x < len(self.local_map.grid[old_y]):
+                                old_tile = self.local_map.grid[old_y][old_x]
+                                if hasattr(old_tile, "unit") and existing_unit in old_tile.unit:
+                                    old_tile.unit.remove(existing_unit)
+                            
+                            # Placer l'unité à sa nouvelle position
+                            if 0 <= y < len(self.local_map.grid) and 0 <= x < len(self.local_map.grid[y]):
+                                new_tile = self.local_map.grid[y][x]
+                                if not hasattr(new_tile, "unit") or new_tile.unit is None:
+                                    new_tile.unit = []
+                                new_tile.unit.append(existing_unit)
+                                existing_unit.position = tuple(pos)
+                        
+                        # Mettre à jour les autres attributs
+                        existing_unit.hp = unit_state.get("hp")
+                        existing_unit.target_position = unit_state.get("target_position")
+                        existing_unit.target_attack = unit_state.get("target_attack")
+                        existing_unit.is_attacked_by = unit_state.get("is_attacked_by")
+                        existing_unit.direction = unit_state.get("direction")
+                        existing_unit.current_frame = unit_state.get("current_frame")
+                        existing_unit.frame_counter = unit_state.get("frame_counter")
+                        existing_unit.is_moving = unit_state.get("is_moving")
+                        existing_unit.task = unit_state.get("task")
+                    
+                    else:
+                        # Créer une nouvelle unité
                         if 0 <= y < len(self.local_map.grid) and 0 <= x < len(self.local_map.grid[y]):
                             tile = self.local_map.grid[y][x]
                             unit_class_name = unit_state.get("class")
@@ -220,7 +285,9 @@ class NetworkManager:
                             if unit_cls is None:
                                 debug_print(f"Classe d'unité non reconnue: {unit_class_name}")
                                 continue
-                            unit = unit_cls(player=remote_player, position=tuple(unit_state.get("position", (0, 0))))
+
+                            unit = unit_cls(player=remote_player, position=tuple(pos))
+                            unit.id = unit_id
                             unit.hp = unit_state.get("hp")
                             unit.target_position = unit_state.get("target_position")
                             unit.target_attack = unit_state.get("target_attack")
@@ -234,7 +301,8 @@ class NetworkManager:
                             if not hasattr(tile, "unit") or tile.unit is None:
                                 tile.unit = []
                             tile.unit.append(unit)
-                            debug_print(f"Unité ajoutée dans la tile ({x}, {y}) pour le joueur {remote_player.name}.")
+                            remote_player.units[unit_id] = unit
+                            debug_print(f"Nouvelle unité {unit_id} ajoutée dans la tile ({x}, {y}) pour le joueur {remote_player.name}.")
 
     def close(self):
         """Ferme les sockets réseau."""
@@ -244,6 +312,7 @@ class NetworkManager:
 class RemotePlayer:
     def __init__(self, addr, name=None):
         self.addr = addr
+        self.units = {}
         if name is None:
             self.name = f"Remote-{addr[0]}:{addr[1]}"
         else:
