@@ -1054,7 +1054,6 @@ class GUI(threading.Thread):
         map_width_px = (max(self.game_data.map.width,self.game_data.map.height) + 1) * self.TILE_WIDTH
         map_height_px = (max(self.game_data.map.height,self.game_data.map.width) + 1) * self.TILE_HEIGHT
         self.pre_rendered_map = pygame.Surface((map_width_px, map_height_px), pygame.SRCALPHA)
-        self.trees_drawn = {}
 
         for y in range(self.game_data.map.height):
             for x in range(self.game_data.map.width):
@@ -1074,36 +1073,16 @@ class GUI(threading.Thread):
                     tile_rect = tile_image.get_rect(center=(tile_x, tile_y))
                     self.pre_rendered_map.blit(tile_image, tile_rect)
 
-                pygame.draw.lines(self.pre_rendered_map, (0, 0, 0), True, transformed_polygon, 1)  # Bordures
+                pygame.draw.lines(self.pre_rendered_map, (0, 0, 0), True, transformed_polygon, 1)
 
-                # Récupérer les informations de la tuile et placer les ressources
+                # Fleurs aléatoires (gardé car c'est décoratif)
                 tile = self.game_data.map.grid[y][x]
-
                 if tile and random.random() < 0.01:
-                        flower_image = self.IMAGES["Flower"]
-                        self.pre_rendered_map.blit(flower_image, (
-                            tile_x - (flower_image.get_width() // 2),
-                            tile_y - flower_image.get_height() + (self.TILE_HEIGHT // 2)
-                        ))
-
-                if tile and tile.resource:
-                    # Ajuster les coordonnées pour centrer la ressource
-                    screen_x = tile_x
-                    screen_y = tile_y - (self.TILE_HEIGHT // 2)
-
-                    if tile.resource.type == "Wood":
-                        image = self.IMAGES["Wood"]
-                        self.pre_rendered_map.blit(image, (
-                            tile_x - (image.get_width() // 2),
-                            tile_y - image.get_height() + (self.TILE_HEIGHT // 2)
-                        ))
-
-                    elif tile.resource.type == "Gold":
-                        image = self.IMAGES["Gold"]
-                        self.pre_rendered_map.blit(image, (
-                            tile_x - (image.get_width() // 2),
-                            tile_y - image.get_height() + (self.TILE_HEIGHT // 2)
-                        ))
+                    flower_image = self.IMAGES["Flower"]
+                    self.pre_rendered_map.blit(flower_image, (
+                        tile_x - (flower_image.get_width() // 2),
+                        tile_y - flower_image.get_height() + (self.TILE_HEIGHT // 2)
+                    ))
 
     def draw_health_bar(self, screen_x, screen_y, hp, max_hp, unit_type ,width=30, height=4):
         # Calcul du pourcentage de vie restant
@@ -1136,6 +1115,17 @@ class GUI(threading.Thread):
         self.screen.blit(self.pre_rendered_map, (0, 0), visible_rect)
 
         entities = []
+
+        # Collecter les ressources
+        for y in range(self.game_data.map.height):
+            for x in range(self.game_data.map.width):
+                tile = self.game_data.map.grid[y][x]
+                if tile and tile.resource:
+                    iso_x, iso_y = self.cart_to_iso(x, y)
+                    resource_x = iso_x + (self.game_data.map.height * self.TILE_WIDTH // 2)
+                    resource_y = iso_y
+                    if visible_rect.collidepoint(resource_x, resource_y):
+                        entities.append((resource_x, resource_y, "resource", tile.resource, 0))
 
         # Collect player units and buildings
         for player in self.game_data.players:
@@ -1181,7 +1171,21 @@ class GUI(threading.Thread):
             #if entity_type in ["unit", "building"]:  # Supposons que `obj` a des attributs `hp` et `max_hp`
             #    self.draw_health_bar(screen_x, screen_y, obj.hp, obj.max_hp, image.get_height())
 
-            if entity_type == "unit":
+            if entity_type == "resource":
+                if obj.type == "Wood":
+                    image = self.IMAGES["Wood"]
+                    self.screen.blit(image, (
+                        screen_x - (image.get_width() // 2),
+                        screen_y - image.get_height() + (self.TILE_HEIGHT // 2)
+                    ))
+                elif obj.type == "Gold":
+                    image = self.IMAGES["Gold"]
+                    self.screen.blit(image, (
+                        screen_x - (image.get_width() // 2),
+                        screen_y - image.get_height() + (self.TILE_HEIGHT // 2)
+                    ))
+
+            elif entity_type == "unit":
                 unit_type = obj.sprite 
                 state = obj.task
                 direction = obj.direction
@@ -1726,10 +1730,10 @@ class GUI(threading.Thread):
                 text_x += unit_text_width
 
     def check_victory(self):
-        active_players = [p for p in self.game_data.players if p.units or p.buildings]
+        """active_players = [p for p in self.game_data.players if p.units or p.buildings]
         if len(active_players) == 1:
             self.display_victory_screen(active_players[0].name)
-            return True
+            return True"""
         return False
     
     def display_victory_screen(self, winner_name):

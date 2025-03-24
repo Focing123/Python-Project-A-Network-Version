@@ -370,7 +370,7 @@ class GameEngine:
         """Envoie l'état du jeu via le gestionnaire réseau"""
         if self.network_manager:
             # Tous les joueurs doivent envoyer leur état
-            self.network_manager.send_game_state(self, nature='data')
+            self.network_manager.send_game_state(self)
 
     def __del__(self):
         """Destructeur pour fermer proprement les connexions"""
