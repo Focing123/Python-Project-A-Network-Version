@@ -73,15 +73,14 @@ class GameEngine:
         self.IA_used = False
 
         attempts = 0
-        while attempts < 5:
+        while attempts < 10:
             state = self.network_manager.receive_game_state()
-            if state and isinstance(state, dict):  # Vérifier que state est un dictionnaire
-                # Utiliser get() pour éviter l'erreur KeyError
-                self.networksplayers_positions = state.get('players_positions')
-                if self.networksplayers_positions:  # Si on a reçu des positions
-                    break
+            print(attempts,state)
+            if state and state['players_positions']:
+                self.networksplayers_positions = state['players_positions']
+                break
             attempts += 1
-            time.sleep(1)
+            print("attempts ... ",attempts)
 
         # Attributs liés à la sauvegarde
         if not sauvegarde:
