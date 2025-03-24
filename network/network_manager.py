@@ -91,7 +91,8 @@ class NetworkManager:
             "width": getattr(game_state.map, "width", 0),
             "height": getattr(game_state.map, "height", 0),
             "players": players_state,
-            "actions": []
+            "actions": [],
+            "source_ip": self.local_ip  # Ajout de l'IP source
         }
         
         try:
@@ -190,25 +191,25 @@ class NetworkManager:
 
             # MàJ des joueurs et de leurs unités
             players_state = payload.get("players", [])
-            if not isinstance(players_state, list):
-                debug_print("Structure des joueurs invalide, attendu une liste.")
-                return
-            unit_mapping = {
-                "Villager": Villager,
-                "Swordsman": Swordsman,
-                "Horseman": Horseman,
-                "Archer": Archer,
-                "Unit": Unit
-            }
+            source_ip = payload.get("source_ip", sender_addr[0] if sender_addr else "unknown")
+            
             for player in players_state:
-                player_key = player.get("id") or sender_addr
+                # Utiliser l'IP source comme identifiant unique
+                player_key = (source_ip, player.get("id"))
                 if player_key in self.remote_players:
                     remote_player = self.remote_players[player_key]
                 else:
-                    remote_player = RemotePlayer(sender_addr)
+                    remote_player = RemotePlayer((source_ip, 0), name=f"Remote-{source_ip}-{player.get('id')}")
                     remote_player.id = player.get("id") or remote_player.id
                     self.remote_players[player_key] = remote_player
 
+                unit_mapping = {
+                    "Villager": Villager,
+                    "Swordsman": Swordsman,
+                    "Horseman": Horseman,
+                    "Archer": Archer,
+                    "Unit": Unit
+                }
                 units_state = player.get("units", [])
                 # Créer un set pour suivre les unités existantes
                 existing_unit_ids = set()
@@ -303,6 +304,8 @@ class NetworkManager:
                             tile.unit.append(unit)
                             remote_player.units[unit_id] = unit
                             debug_print(f"Nouvelle unité {unit_id} ajoutée dans la tile ({x}, {y}) pour le joueur {remote_player.name}.")
+                            debug_print(f"GGGGGGGGGGGGGGGGGGGGGGG {self.remote_players}")
+                            debug_print(remote_player.units)
 
     def close(self):
         """Ferme les sockets réseau."""
