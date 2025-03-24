@@ -37,14 +37,29 @@ class GameEngine:
         # Initialisation du gestionnaire réseau
         if self.network:
             self.network_manager = NetworkManager(peer_to_peer=self.network)
-            self.network_manager.run_peer_discovery()
         else:
             self.network_manager = None
 
-        # Initialization de la carte en fonction du rôle réseau : le serveur initialise la carte, le client attend son état:
+        # Initialization de la carte en fonction du rôle réseau : le serveur initialise la carte, le client attend son état
         self.map = Map(*map_size)
         if self.network:
             self.network_manager.local_map = self.map
+        else:
+            # Attendre l'état initial de la carte en provenance du serveur
+            self.map = None
+            while not self.map:
+                if self.network_manager:
+                    state = self.network_manager.receive_game_state()
+                    if state and 'map' in state:
+                        if state['map'] and state['width'] and state['height']:
+                            self.map = Map(state['width'], state['height'])
+                            self.map.initialize_from_state(state['map'])
+                            self.network_manager.local_map = self.map  # Mettre à jour la carte du gestionnaire réseau
+                        else:
+                            raise ValueError("Invalid map state received from other")
+                        break
+            if not self.map:
+                raise Exception("Failed to receive initial map state from other")
         
         self.turn = 0
         self.is_paused = False  # Flag pour vérifier si le jeu est en pause
@@ -71,7 +86,7 @@ class GameEngine:
         self.gui_thread = None
 
         self.last_state_update = 0
-        self.state_update_interval = 0.1  # Intervalle de mise à jour en secondes
+        self.state_update_interval = 2  # Intervalle de mise à jour en secondes
 
     def start_gui_thread(self):
         """Initialize and start the GUI thread"""
@@ -114,10 +129,6 @@ class GameEngine:
                 # Mettre à jour current_time au début de chaque itération si le jeu n'est pas en pause
                 if not self.is_paused:
                     self.current_time = time.time()
-
-                # Dans GameEngine.run()
-                if self.network and self.network_manager and self.turn % 50 == 0:  # Toutes les 50 itérations
-                    self.network_manager.validate_peers()
 
                 # In your game loop, add this at the beginning or right after processing events
                 if self.network == True and self.network_manager and self.current_time - self.last_state_update >= self.state_update_interval:
@@ -375,11 +386,8 @@ class GameEngine:
     def send_multiplayer_state(self):
         """Envoie l'état du jeu via le gestionnaire réseau"""
         if self.network_manager:
-            if self.network_manager.is_server:
-                self.network_manager.handle_incoming_discovery()
-            # On envoie toujours l'état du jeu en mode 'data'
+            # Tous les joueurs doivent envoyer leur état
             self.network_manager.send_game_state(self, nature='data')
-
 
     def __del__(self):
         """Destructeur pour fermer proprement les connexions"""
