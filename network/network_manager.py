@@ -1,5 +1,6 @@
 import socket
 import json
+import pickle  # Ajout de l'import pickle
 import select
 import time
 from backend.logger import debug_print
@@ -38,6 +39,7 @@ class NetworkManager:
         finally:
             s.close()
         return ip
+
     def send_game_state(self, game_state, nature='data'):
         try:
             map_state = game_state.map.get_state()
@@ -89,10 +91,11 @@ class NetworkManager:
             "players": players_state,
             "actions": []
         }
-        json_payload = json.dumps(state)
+        
         try:
-            # Envoie vers le programme C en local (pas de broadcast ici)
-            self.send_socket.sendto(json_payload.encode("utf-8"), ("127.0.0.1", PY_TO_C_PORT))
+            # Utilisation de pickle au lieu de json
+            pickle_payload = pickle.dumps(state)
+            self.send_socket.sendto(pickle_payload, ("127.0.0.1", PY_TO_C_PORT))
         except socket.error as e:
             debug_print(f"Erreur lors de l'envoi UDP vers le programme C: {e}")
 
@@ -102,7 +105,8 @@ class NetworkManager:
             while True:  # Loop to process all incoming packets
                 try:
                     data, addr = self.recv_socket.recvfrom(65507)
-                    payload = json.loads(data.decode('utf-8'))
+                    # Utilisation de pickle au lieu de json
+                    payload = pickle.loads(data)
                     if payload.get("type") == "game_data":
                         debug_print(f"État multijoueur reçu via le programme C depuis {addr}.")
                         self.apply_state_to_game(payload, sender_addr=addr)
