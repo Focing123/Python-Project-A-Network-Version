@@ -329,21 +329,19 @@ class NetworkManager:
                             existing_building = tile.building
 
                     if not existing_building:
-                        # Si ce n'est pas le joueur local (Player 1), on place le bâtiment
-                        if remote_player.id != 1:
-                            # Créer et placer le nouveau bâtiment
-                            building = None
-                            building_cls = globals().get(building_name)
-                            if building_cls:
-                                building = building_cls()
-
-                            if building:
-                                building.position = position
-                                building.hp = hp
-                                building.is_attacked = is_attacked
-                                building.player = f"Player {remote_player.id}"
-                                # Utiliser la méthode place_building de la map
-                                self.local_map.place_building(building, position[0], position[1])
+                        # Créer et placer le nouveau bâtiment
+                        building = None
+                        building_cls = globals().get(building_name)
+                        if building_cls:    
+                            building = building_cls()
+                        if building:
+                            building.position = position
+                            building.hp = hp
+                            building.is_attacked = is_attacked
+                            building.player = f"Player {remote_player.id}"
+                            # Utiliser la méthode place_building de la map
+                            self.local_map.place_building(building, position[0], position[1])
+                            print(f"Nouvelle construction {building_name} ajoutée dans la tile ({x}, {y}) pour le joueur {remote_player.name}.")
                     else:
                         # Mettre à jour les attributs du bâtiment existant
                         existing_building.hp = hp
