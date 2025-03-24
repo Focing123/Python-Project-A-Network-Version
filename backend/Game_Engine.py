@@ -56,8 +56,23 @@ class GameEngine:
 
         # Attributs liés à la sauvegarde
         if not sauvegarde:
-            Building.place_starting_buildings(self.map)   # Placement des bâtiments de départ
-            Unit.place_starting_units(self.players, self.map)  # Placement des unités de départ
+            # Récupération des données réseau pour les bâtiments
+            network_buildings = []
+            if self.network and self.network_manager:
+                # Attendre et recevoir l'état initial du jeu
+                initial_state = self.network_manager.receive_game_state(timeout=1.0)
+                if initial_state:
+                    for player_state in initial_state.get("players", []):
+                        for building in player_state.get("buildings", []):
+                            if building.get("name") == "Town Center" and building.get("position"):
+                                network_buildings.append(
+                                    (building["position"], player_state.get("player_id", "unknown"))
+                                )
+                debug_print(f"Received {len(network_buildings)} Town Center positions from the network")
+                
+            # Placement des bâtiments avec les informations réseau
+            Building.place_starting_buildings(self.map, network_buildings)
+            Unit.place_starting_units(self.players, self.map) 
         
         self.debug_print = debug_print
         self.current_time = time.time()
