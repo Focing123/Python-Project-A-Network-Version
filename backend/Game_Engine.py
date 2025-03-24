@@ -76,7 +76,7 @@ class GameEngine:
         while attempts < 5:
             state = self.network_manager.receive_game_state()
             print(attempts,state)
-            if state and 'players_positions' in state:
+            if state and state['players_positions']:
                 self.networksplayers_positions = state['players_positions']
             break
             attempts += 1

@@ -143,7 +143,7 @@ int main() {
     memset(&addr_broadcast_send, 0, sizeof(addr_broadcast_send));
     addr_broadcast_send.sin_family = AF_INET;
     addr_broadcast_send.sin_port = htons(BROADCAST_PORT);
-    addr_broadcast_send.sin_addr.s_addr = inet_addr("192.168.141.255");
+    addr_broadcast_send.sin_addr.s_addr = inet_addr("172.20.10.2.255");
 
     // Socket pour recevoir les broadcasts
     sock_forward = socket(AF_INET, SOCK_DGRAM, 0);
