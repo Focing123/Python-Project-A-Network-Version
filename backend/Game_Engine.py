@@ -31,6 +31,7 @@ class GameEngine:
     def __init__(self, game_mode, map_size, players, sauvegarde=False, network_mode=False):
         self.game_mode = game_mode
         self.network = network_mode
+        self.networksplayers_positions = None
         self.map_size = map_size
         self.players = players
         self.visitors = []
@@ -50,7 +51,6 @@ class GameEngine:
             while not self.map:
                 if self.network_manager:
                     state = self.network_manager.receive_game_state()
-                    self.networksplayers_positions = state['players_positions']
                     if state and 'map' in state:
                         if state['map'] and state['width'] and state['height']:
                             self.map = Map(state['width'], state['height'])
@@ -72,6 +72,17 @@ class GameEngine:
             self.players[i].ai = self.ias[i]
         self.IA_used = False
 
+        attempts = 0
+        while attempts < 5:
+            state = self.network_manager.receive_game_state()
+            if state and 'players_positions' in state:
+                self.networksplayers_positions = state['players_positions']
+            break
+            attempts += 1
+            time.sleep(1)  # Wait for 1 second before retrying
+        else:
+            raise Exception("Failed to receive players' positions after 5 attempts")
+
         # Attributs liés à la sauvegarde
         if not sauvegarde:
             if not self.network :
@@ -81,7 +92,7 @@ class GameEngine:
                 if self.networksplayers_positions is not None:
                     Building.place_starting_buildings(self.map, enemy_positions=self.networksplayers_positions)
                 else:
-                    debug_print("Erreur: positions des joueurs non initialisées")
+                    Building.place_starting_buildings(self.map)
             Unit.place_starting_units(self.players, self.map)  # Placement des unités de départ
 
         self.debug_print = debug_print
