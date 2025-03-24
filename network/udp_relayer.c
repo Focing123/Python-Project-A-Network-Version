@@ -15,6 +15,19 @@
 #define BUFFER_SIZE 65507
 #define MAX_FRAGMENTS 100
 
+// Flag for quiet mode
+int quiet_mode = 0;
+
+// Debug print function that respects quiet mode
+void debug_print(const char* format, ...) {
+    if (!quiet_mode) {
+        va_list args;
+        va_start(args, format);
+        vprintf(format, args);
+        va_end(args);
+    }
+}
+
 // Structure pour stocker les fragments
 typedef struct {
     char* data;
@@ -60,7 +73,7 @@ void forward_message(SOCKET sock, const char* buffer, int length, struct sockadd
         int chunk_size = min(16384, length - sent);
         int result = sendto(sock, buffer + sent, chunk_size, 0, dest_addr, addr_len);
         if (result == SOCKET_ERROR) {
-            printf("Erreur d'envoi: %d\n", WSAGetLastError());
+            debug_print("Erreur d'envoi: %d\n", WSAGetLastError());
             break;
         }
         sent += result;
@@ -93,7 +106,15 @@ int receiveComplete(SOCKET sock, char* buffer, int maxSize, struct sockaddr* fro
     return total;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+    // Check for quiet mode flag
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-q") == 0 || strcmp(argv[i], "--quiet") == 0) {
+            quiet_mode = 1;
+            break;
+        }
+    }
+
     WSADATA wsaData;
     SOCKET sock_recv, sock_broadcast, sock_forward;
     struct sockaddr_in addr_recv, addr_broadcast_send, addr_broadcast_recv, addr_forward, addr_src;
@@ -102,14 +123,14 @@ int main() {
     fd_set readfds;
     
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        printf("WSAStartup échoué.\n");
+        debug_print("WSAStartup échoué.\n");
         return 1;
     }
 
     // Socket pour recevoir depuis Python
     sock_recv = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock_recv == INVALID_SOCKET) {
-        printf("Erreur de création du socket de réception: %d\n", WSAGetLastError());
+        debug_print("Erreur de création du socket de réception: %d\n", WSAGetLastError());
         return 1;
     }
 
@@ -122,7 +143,7 @@ int main() {
     addr_recv.sin_port = htons(PY_TO_C_PORT);
 
     if (bind(sock_recv, (struct sockaddr*)&addr_recv, sizeof(addr_recv)) == SOCKET_ERROR) {
-        printf("Erreur lors du bind du socket de réception: %d\n", WSAGetLastError());
+        debug_print("Erreur lors du bind du socket de réception: %d\n", WSAGetLastError());
         closesocket(sock_recv);
         WSACleanup();
         return 1;
@@ -131,7 +152,7 @@ int main() {
     // Socket pour envoyer en broadcast
     sock_broadcast = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock_broadcast == INVALID_SOCKET) {
-        printf("Erreur de création du socket broadcast: %d\n", WSAGetLastError());
+        debug_print("Erreur de création du socket broadcast: %d\n", WSAGetLastError());
         closesocket(sock_recv);
         WSACleanup();
         return 1;
@@ -148,7 +169,7 @@ int main() {
     // Socket pour recevoir les broadcasts
     sock_forward = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock_forward == INVALID_SOCKET) {
-        printf("Erreur de création du socket forward: %d\n", WSAGetLastError());
+        debug_print("Erreur de création du socket forward: %d\n", WSAGetLastError());
         closesocket(sock_recv);
         closesocket(sock_broadcast);
         WSACleanup();
@@ -164,7 +185,7 @@ int main() {
     addr_broadcast_recv.sin_port = htons(BROADCAST_PORT);
 
     if (bind(sock_forward, (struct sockaddr*)&addr_broadcast_recv, sizeof(addr_broadcast_recv)) == SOCKET_ERROR) {
-        printf("Erreur lors du bind du socket broadcast: %d\n", WSAGetLastError());
+        debug_print("Erreur lors du bind du socket broadcast: %d\n", WSAGetLastError());
         closesocket(sock_recv);
         closesocket(sock_broadcast);
         closesocket(sock_forward);
@@ -205,7 +226,7 @@ int main() {
         // Traitement des messages depuis Python
         int recv_len = receiveComplete(sock_recv, buffer, BUFFER_SIZE, (struct sockaddr*)&addr_src, &addr_len);
         if (recv_len > 0) {
-            printf("Reçu %d octets depuis Python\n", recv_len);
+            debug_print("Reçu %d octets depuis Python\n", recv_len);
             // Transférer tel quel vers le broadcast
             forward_message(sock_broadcast, buffer, recv_len, 
                           (struct sockaddr*)&addr_broadcast_send, 
@@ -215,7 +236,7 @@ int main() {
         // Traitement des messages broadcast
         recv_len = receiveComplete(sock_forward, buffer, BUFFER_SIZE, (struct sockaddr*)&addr_src, &addr_len);
         if (recv_len > 0) {
-            //printf("Reçu %d octets en broadcast\n", recv_len);
+            debug_print("Reçu %d octets en broadcast\n", recv_len);
             // Transférer tel quel vers Python
             forward_message(sock_forward, buffer, recv_len,
                           (struct sockaddr*)&addr_forward,
