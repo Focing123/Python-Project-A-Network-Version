@@ -3,6 +3,7 @@ import json
 import pickle  # Ajout de l'import pickle
 import select
 import time
+import zlib  # Ajoutez cet import en haut du fichier
 from backend.logger import debug_print
 from frontend.Terrain import Gold, Wood  # Assurez-vous que le chemin d'import est correct
 from backend.Units import *
@@ -93,24 +94,67 @@ class NetworkManager:
         }
         
         try:
-            # Utilisation de pickle au lieu de json
+            # Sérialiser et compresser les données
             pickle_payload = pickle.dumps(state)
-            self.send_socket.sendto(pickle_payload, ("127.0.0.1", PY_TO_C_PORT))
+            compressed_payload = zlib.compress(pickle_payload)
+            
+            # Fragmenter si nécessaire (max 60000 octets par paquet)
+            MAX_CHUNK_SIZE = 60000
+            if len(compressed_payload) > MAX_CHUNK_SIZE:
+                chunks = [compressed_payload[i:i + MAX_CHUNK_SIZE] 
+                         for i in range(0, len(compressed_payload), MAX_CHUNK_SIZE)]
+                for i, chunk in enumerate(chunks):
+                    packet = {
+                        'fragment': True,
+                        'fragment_id': i,
+                        'total_fragments': len(chunks),
+                        'data': chunk
+                    }
+                    self.send_socket.sendto(pickle.dumps(packet), ("127.0.0.1", PY_TO_C_PORT))
+            else:
+                # Envoi direct si petit paquet
+                packet = {
+                    'fragment': False,
+                    'data': compressed_payload
+                }
+                self.send_socket.sendto(pickle.dumps(packet), ("127.0.0.1", PY_TO_C_PORT))
         except socket.error as e:
-            debug_print(f"Erreur lors de l'envoi UDP vers le programme C: {e}")
+            debug_print(f"Erreur lors de l'envoi UDP: {e}")
 
     def receive_game_state(self, timeout=0.1):  # Increase timeout to 100ms
         self.recv_socket.settimeout(timeout)
+        fragments = {}
         try:
             while True:  # Loop to process all incoming packets
                 try:
                     data, addr = self.recv_socket.recvfrom(65507)
-                    # Utilisation de pickle au lieu de json
-                    payload = pickle.loads(data)
-                    if payload.get("type") == "game_data":
-                        debug_print(f"État multijoueur reçu via le programme C depuis {addr}.")
-                        self.apply_state_to_game(payload, sender_addr=addr)
-                        return payload
+                    packet = pickle.loads(data)
+                    
+                    if packet.get('fragment', False):
+                        # Gestion des fragments
+                        frag_id = packet['fragment_id']
+                        total_frags = packet['total_fragments']
+                        fragments[frag_id] = packet['data']
+                        
+                        # Vérifier si tous les fragments sont reçus
+                        if len(fragments) == total_frags:
+                            # Réassembler et décompresser
+                            complete_data = b''.join(fragments[i] for i in range(total_frags))
+                            decompressed_data = zlib.decompress(complete_data)
+                            payload = pickle.loads(decompressed_data)
+                            
+                            if payload.get("type") == "game_data":
+                                self.apply_state_to_game(payload, sender_addr=addr)
+                                return payload
+                    else:
+                        # Paquet unique
+                        decompressed_data = zlib.decompress(packet['data'])
+                        payload = pickle.loads(decompressed_data)
+                        
+                        if payload.get("type") == "game_data":
+                            self.apply_state_to_game(payload, sender_addr=addr)
+                            return payload
+                            
                 except socket.timeout:
                     return None  # Exit after timeout
         except Exception as e:

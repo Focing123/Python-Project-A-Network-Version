@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <time.h>
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -12,6 +13,60 @@
 #define BROADCAST_PORT 6001
 #define C_TO_PY_PORT 6002
 #define BUFFER_SIZE 65507
+#define MAX_FRAGMENTS 100
+
+// Structure pour stocker les fragments
+typedef struct {
+    char* data;
+    int size;
+    int received;
+} Fragment;
+
+// Structure pour gérer les fragments en cours de réception
+typedef struct {
+    Fragment fragments[MAX_FRAGMENTS];
+    int total_fragments;
+    time_t last_update;
+} FragmentManager;
+
+// Initialisation du gestionnaire de fragments
+void init_fragment_manager(FragmentManager* manager) {
+    for (int i = 0; i < MAX_FRAGMENTS; i++) {
+        manager->fragments[i].data = NULL;
+        manager->fragments[i].size = 0;
+        manager->fragments[i].received = 0;
+    }
+    manager->total_fragments = 0;
+    manager->last_update = time(NULL);
+}
+
+// Libération de la mémoire des fragments
+void clear_fragments(FragmentManager* manager) {
+    for (int i = 0; i < MAX_FRAGMENTS; i++) {
+        if (manager->fragments[i].data) {
+            free(manager->fragments[i].data);
+            manager->fragments[i].data = NULL;
+        }
+        manager->fragments[i].size = 0;
+        manager->fragments[i].received = 0;
+    }
+    manager->total_fragments = 0;
+}
+
+// Fonction pour transférer un message fragmenté
+void forward_message(SOCKET sock, const char* buffer, int length, struct sockaddr* dest_addr, int addr_len) {
+    int sent = 0;
+    while (sent < length) {
+        int chunk_size = min(16384, length - sent);
+        int result = sendto(sock, buffer + sent, chunk_size, 0, dest_addr, addr_len);
+        if (result == SOCKET_ERROR) {
+            printf("Erreur d'envoi: %d\n", WSAGetLastError());
+            break;
+        }
+        sent += result;
+        Sleep(1);
+    }
+}
 
 // Fonction pour recevoir tous les fragments d'un message
 int receiveComplete(SOCKET sock, char* buffer, int maxSize, struct sockaddr* from, int* fromlen) {
@@ -130,54 +185,48 @@ int main() {
     ioctlsocket(sock_broadcast, FIONBIO, &mode);
 
     printf("Relais UDP actif.\n");
-
-    FD_ZERO(&readfds);
-    FD_SET(sock_recv, &readfds);
-    FD_SET(sock_forward, &readfds);
+    
+    FragmentManager recv_fragments;
+    FragmentManager forward_fragments;
+    init_fragment_manager(&recv_fragments);
+    init_fragment_manager(&forward_fragments);
 
     while (1) {
+        time_t current_time = time(NULL);
+        
+        // Nettoyer les fragments obsolètes (plus de 5 secondes)
+        if (current_time - recv_fragments.last_update > 5) {
+            clear_fragments(&recv_fragments);
+        }
+        if (current_time - forward_fragments.last_update > 5) {
+            clear_fragments(&forward_fragments);
+        }
+
         // Traitement des messages depuis Python
         int recv_len = receiveComplete(sock_recv, buffer, BUFFER_SIZE, (struct sockaddr*)&addr_src, &addr_len);
         if (recv_len > 0) {
             printf("Reçu %d octets depuis Python\n", recv_len);
-            // Envoyer en plusieurs fois si nécessaire
-            int sent = 0;
-            while (sent < recv_len) {
-                int chunk_size = min(16384, recv_len - sent); // Maximum 16KB par envoi
-                int result = sendto(sock_broadcast, buffer + sent, chunk_size, 0, 
-                                 (struct sockaddr*)&addr_broadcast_send, 
-                                 sizeof(addr_broadcast_send));
-                if (result == SOCKET_ERROR) {
-                    printf("Erreur d'envoi broadcast: %d\n", WSAGetLastError());
-                    break;
-                }
-                sent += result;
-                Sleep(1); // Petit délai entre les envois
-            }
+            // Transférer tel quel vers le broadcast
+            forward_message(sock_broadcast, buffer, recv_len, 
+                          (struct sockaddr*)&addr_broadcast_send, 
+                          sizeof(addr_broadcast_send));
         }
 
         // Traitement des messages broadcast
         recv_len = receiveComplete(sock_forward, buffer, BUFFER_SIZE, (struct sockaddr*)&addr_src, &addr_len);
         if (recv_len > 0) {
             printf("Reçu %d octets en broadcast\n", recv_len);
-            // Forward vers Python
-            int sent = 0;
-            while (sent < recv_len) {
-                int chunk_size = min(16384, recv_len - sent);
-                int result = sendto(sock_forward, buffer + sent, chunk_size, 0,
-                                 (struct sockaddr*)&addr_forward,
-                                 sizeof(addr_forward));
-                if (result == SOCKET_ERROR) {
-                    printf("Erreur d'envoi vers Python: %d\n", WSAGetLastError());
-                    break;
-                }
-                sent += result;
-                Sleep(1);
-            }
+            // Transférer tel quel vers Python
+            forward_message(sock_forward, buffer, recv_len,
+                          (struct sockaddr*)&addr_forward,
+                          sizeof(addr_forward));
         }
 
-        Sleep(1); // Éviter une utilisation CPU excessive
+        Sleep(1);
     }
+
+    clear_fragments(&recv_fragments);
+    clear_fragments(&forward_fragments);
 
     closesocket(sock_recv);
     closesocket(sock_broadcast);
