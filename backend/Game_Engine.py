@@ -73,13 +73,16 @@ class GameEngine:
         self.IA_used = False
 
         attempts = 0
-        while attempts < 10:
-            state = self.network_manager.receive_game_state(timeout=1)
-            if state["players_positions"] is not None:
-                self.networksplayers_positions = state["players_positions"]
-                print("Players positions received")
+        while attempts < 5:
+            state = self.network_manager.receive_game_state()
+            if state and state['players_positions']:
+                self.networksplayers_positions = state['players_positions']
                 break
             attempts += 1
+            time.sleep(1)
+        else :
+            print("Failed to receive initial players positions from other")
+
 
         # Attributs liés à la sauvegarde
         if not sauvegarde:
