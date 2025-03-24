@@ -55,6 +55,7 @@ class NetworkManager:
             except AttributeError:
                 p_state = {
                     "name": getattr(player, "name", "inconnu"),
+                    "id": getattr(player, "id", hash(player.name)),
                     "units": [
                         {
                             'id': getattr(unit, "id", hash(f"{player.name}-{unit.__class__.__name__}-{unit.position}")),
@@ -78,7 +79,9 @@ class NetworkManager:
                             "name": getattr(b, "name", None),
                             "hp": getattr(b, "hp", None),
                             "position": getattr(b, "position", None),
-                            "is_attacked": getattr(b, "is_attacked", False)
+                            "is_attacked": getattr(b, "is_attacked", False),
+                            "size": getattr(b, "size", 1),
+                            "built": getattr(b, "built", True)
                         }
                         for b in getattr(player, "buildings", [])
                     ],
@@ -205,13 +208,21 @@ class NetworkManager:
             
             for player in players_state:
                 # Utiliser l'IP source comme identifiant unique
-                player_key = (source_ip, player.get("id"))
+                player_key = (source_ip, player.get("id", hash(player.get("name", "unknown"))))
                 if player_key in self.remote_players:
                     remote_player = self.remote_players[player_key]
                 else:
                     remote_player = RemotePlayer((source_ip, 0), name=f"Remote-{source_ip}-{player.get('id')}")
                     remote_player.id = player.get("id") or remote_player.id
                     self.remote_players[player_key] = remote_player
+                    
+                    # Add remote player to game engine players list if not already there
+                    if hasattr(self, 'game_engine') and self.game_engine:
+                        if remote_player not in self.game_engine.players:
+                            self.game_engine.players.append(remote_player)
+                            if hasattr(self.game_engine, 'ias'):
+                                self.game_engine.ias.append(IA(remote_player, "defensive", self.local_map, time.time()))
+                                remote_player.ai = self.game_engine.ias[-1]
 
                 unit_mapping = {
                     "Villager": Villager,
@@ -312,60 +323,78 @@ class NetworkManager:
                             if not hasattr(tile, "unit") or tile.unit is None:
                                 tile.unit = []
                             tile.unit.append(unit)
-                            remote_player.units[unit_id] = unit
+                            if unit_id not in remote_player.units:
+                                remote_player.units[unit_id] = unit
+                                if not hasattr(remote_player, 'population'):
+                                    remote_player.population = 0
+                                remote_player.population += 1
                             #debug_print(f"Nouvelle unité {unit_id} ajoutée dans la tile ({x}, {y}) pour le joueur {remote_player.name}.")
                         
                 # MàJ des bâtiments
                 buildings_state = player.get("buildings", [])
+                
+                # Create set of existing building positions for this player
+                existing_positions = {b.position for b in remote_player.buildings} if hasattr(remote_player, 'buildings') else set()
+                
                 for building_state in buildings_state:
                     building_name = building_state.get("name")
                     position = building_state.get("position")
                     hp = building_state.get("hp")
-                    is_attacked = building_state.get("is_attacked", False)
-
+                    
                     if not building_name or not position:
                         continue
+                        
+                    # Skip if building already exists at this position
+                    if tuple(position) in existing_positions:
+                        # Just update existing building properties
+                        for b in remote_player.buildings:
+                            if b.position == tuple(position):
+                                b.hp = hp
+                                b.is_attacked = building_state.get("is_attacked", False)
+                        continue
+                        
+                    # Create and place the new building
+                    building = None
+                    if building_name == "TownCenter":
+                        building = TownCenter(remote_player)
+                    elif building_name == "Barracks":
+                        building = Barracks(remote_player)
+                    elif building_name == "Stable":
+                        building = Stable(remote_player)
+                    elif building_name == "ArcheryRange":
+                        building = ArcheryRange(remote_player)
+                    elif building_name == "Farm":
+                        building = Farm(remote_player)
+                    elif building_name == "House":
+                        building = House(remote_player)
+                    elif building_name == "Keep":
+                        building = Keep(remote_player)
+                    elif building_name == "Camp":
+                        building = Camp(remote_player)
+                        
+                    if building:
+                        building.position = tuple(position)
+                        building.hp = hp
+                        building.is_attacked = building_state.get("is_attacked", False)
+                        
+                        # Make sure the local map reflects this building
+                        x, y = position
+                        if 0 <= y < len(self.local_map.grid) and 0 <= x < len(self.local_map.grid[y]):
+                            self.local_map.place_building(x, y, building)
+                            
+                            # Add to remote player's buildings
+                            if not hasattr(remote_player, 'buildings'):
+                                remote_player.buildings = []
+                            remote_player.buildings.append(building)
+                            
+                            debug_print(f"Added building {building_name} at ({x},{y}) for player {remote_player.name}", 'green')
 
-                    # Vérifier si le bâtiment existe déjà à cette position
-                    x, y = position
-                    existing_building = None
-                    if 0 <= y < len(self.local_map.grid) and 0 <= x < len(self.local_map.grid[y]):
-                        tile = self.local_map.grid[y][x]
-                        if hasattr(tile, 'building') and tile.building:
-                            existing_building = tile.building
-
-                    if not existing_building:
-                        # Créer et placer le nouveau bâtiment
-                        building = None
-                        if building_name == "TownCenter":
-                            building_cls = TownCenter
-                        elif building_name == "Barracks":
-                            building_cls = Barracks
-                        elif building_name == "Stable":
-                            building_cls = Stable
-                        elif building_name == "ArcheryRange":
-                            building_cls = ArcheryRange
-                        elif building_name == "Farm":
-                            building_cls = Farm
-                        elif building_name == "House":
-                            building_cls = House
-                        elif building_name == "Keep":
-                            building_cls = Keep
-                        elif building_name == "Camp":
-                            building_cls = Camp
-                        if building_cls:    
-                            building = building_cls()
-                        if building:
-                            building.position = position
-                            building.hp = hp
-                            building.is_attacked = is_attacked
-                            # Utiliser la méthode place_building de la map
-                            self.local_map.place_building(building, position[0], position[1])
-                            print(f"Nouvelle construction {building_name} ajoutée dans la tile ({x}, {y}) pour le joueur {remote_player.name}.")
-                    else:
-                        # Mettre à jour les attributs du bâtiment existant
-                        existing_building.hp = hp
-                        existing_building.is_attacked = is_attacked
+                # Add remote player to game's player list if not already there
+                if hasattr(self, 'game_engine') and self.game_engine:
+                    if remote_player not in self.game_engine.players:
+                        self.game_engine.players.append(remote_player)
+                        self.game_engine.ias.append(IA(remote_player, "defensive", self.local_map, time.time()))
+                        remote_player.ai = self.game_engine.ias[-1]
 
     def close(self):
         """Ferme les sockets réseau."""

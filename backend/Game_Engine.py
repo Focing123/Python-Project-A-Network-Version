@@ -36,6 +36,8 @@ class GameEngine:
         # Initialisation du gestionnaire réseau
         if self.network:
             self.network_manager = NetworkManager(peer_to_peer=self.network)
+            self.network_manager.local_map = self.map
+            self.network_manager.game_engine = self  # Add reference to the game engine
         else:
             self.network_manager = None
 
@@ -130,7 +132,7 @@ class GameEngine:
 
                 # In your game loop, add this at the beginning or right after processing events
                 if self.network == True and self.network_manager and self.current_time - self.last_state_update >= self.state_update_interval:
-                    self.send_multiplayer_state()  # Send game state to other players
+                    self.send_multiplayer_state()  # Make sure this is called
                     self.network_manager.receive_game_state()  # Receive game state from other players
                     if self.map.grid != self.network_manager.local_map.grid or self.map.resources != self.network_manager.local_map.resources:
                         self.map = self.network_manager.local_map

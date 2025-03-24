@@ -43,40 +43,29 @@ class Building:
         angle_step = 360 // total_players
         random.seed()
 
-        def try_opposite_position(x, y):
-            # Calculate opposite position relative to map center
-            dx = x - map_center_x
-            dy = y - map_center_y
-            opposite_x = map_center_x - dx
-            opposite_y = map_center_y - dy
-            return opposite_x, opposite_y
+        # If network buildings exist, ensure local player starts opposite to them
+        if network_buildings and len(network_buildings) > 0:
+            network_x, network_y = network_buildings[0][0]  # Take first network building as reference
+            # Calculate angle from map center to network building
+            dx = network_x - map_center_x
+            dy = network_y - map_center_y
+            network_angle = math.degrees(math.atan2(dy, dx)) % 360
+            
+            # Calculate opposite angle (+180 degrees)
+            start_angle = (network_angle + 180) % 360
+            
+            # Override normal angle placement for the first player
+            angles = [(start_angle + i * angle_step) % 360 for i in range(total_players)]
+        else:
+            # Normal angle distribution if no network buildings
+            angles = [i * angle_step for i in range(total_players)]
 
         for i, player in enumerate(players_list):
-            # Check if there's a network building to avoid
-            if network_buildings:
-                # Find closest network building position
-                closest_pos = None
-                min_distance = float('inf')
-                for pos, _ in network_buildings:
-                    dist = math.sqrt((map_center_x - pos[0])**2 + (map_center_y - pos[1])**2)
-                    if dist < min_distance:
-                        min_distance = dist
-                        closest_pos = pos
-                
-                if closest_pos:
-                    # Place at opposite position of network building
-                    town_center_x, town_center_y = try_opposite_position(*closest_pos)
-                else:
-                    # Regular placement if no network building found
-                    angle = math.radians(i * angle_step)
-                    town_center_x = map_center_x + int(radius * math.cos(angle))
-                    town_center_y = map_center_y + int(radius * math.sin(angle))
-            else:
-                # Regular placement if no network buildings
-                angle = math.radians(i * angle_step)
-                town_center_x = map_center_x + int(radius * math.cos(angle))
-                town_center_y = map_center_y + int(radius * math.sin(angle))
-
+            # Calculate position based on assigned angle
+            angle = math.radians(angles[i])
+            town_center_x = map_center_x + int(radius * math.cos(angle))
+            town_center_y = map_center_y + int(radius * math.sin(angle))
+            
             # Ajuster la position si nécessaire
             attempt_count = 0
             while (not game_map.is_area_free(town_center_x, town_center_y, TownCenter(player).size) and 
