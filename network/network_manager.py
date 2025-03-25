@@ -30,17 +30,7 @@ class NetworkManager:
         self.local_map = None
         self.remote_players = {}  # Dictionnaire: { addr: RemotePlayer }
 
-    def get_local_ip(self):
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            s.connect(('8.8.8.8', 80))
-            ip = s.getsockname()[0]
-        except Exception:
-            ip = '127.0.0.1'
-        finally:
-            s.close()
-        return ip
-
+ 
     def send_game_state(self, game_state, nature='data'):
         try:
             map_state = game_state.map.get_state()
