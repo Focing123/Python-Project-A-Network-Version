@@ -185,18 +185,10 @@ class Unit:
     @classmethod
     def spawn_unit(cls, unit_class, x, y, player, game_map):
         if isinstance(unit_class, type):
-            if unit_class == Horseman:
-                unit = unit_class(player, position=(x, y))
-            elif unit_class == Villager:
-                unit = unit_class(player, position=(x, y))
-            else:
-                unit = unit_class(player)
+            unit = unit_class(player, position=(x, y))
         else:
             unit = unit_class
-        
 
-
-        
         if (0 <= x < game_map.width and 
             0 <= y < game_map.height and 
             not (player.population >= player.max_population or 

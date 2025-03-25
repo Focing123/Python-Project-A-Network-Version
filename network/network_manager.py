@@ -334,7 +334,7 @@ class NetworkManager:
                             
                             if not hasattr(tile, "unit") or tile.unit is None:
                                 tile.unit = []
-                            tile.unit.append(unit)
+                            self.local_map.place_unit(x, y, unit)
                             remote_player.units.append(unit)
                             #debug_print(f"Nouvelle unité {unit_id} ajoutée dans la tile ({x}, {y}) pour le joueur {remote_player.name}.")
                         
@@ -402,31 +402,8 @@ class NetworkManager:
                             new_building.is_attacked = is_attacked
 
                             # Placer le bâtiment sur toutes les tuiles qu'il occupe
-                            size = new_building.size
-                            can_place = True
+                            self.local_map.place_building(x, y, new_building)
                             
-                            # Vérifier que toutes les tuiles sont disponibles
-                            for dy in range(size):
-                                for dx in range(size):
-                                    check_y = y + dy
-                                    check_x = x + dx
-                                    if not (0 <= check_y < len(self.local_map.grid) and 
-                                          0 <= check_x < len(self.local_map.grid[0])):
-                                        can_place = False
-                                        break
-                                    if hasattr(self.local_map.grid[check_y][check_x], 'building') and \
-                                       self.local_map.grid[check_y][check_x].building is not None:
-                                        can_place = False
-                                        break
-
-                            if can_place:
-                                # Placer le bâtiment sur toutes les tuiles
-                                for dy in range(size):
-                                    for dx in range(size):
-                                        tile = self.local_map.grid[y + dy][x + dx]
-                                        tile.building = new_building
-                                remote_player.buildings.append(new_building)
-                                #debug_print(f"New building {building_name} added at ({x}, {y}) with size {size}x{size}")
 
     def close(self):
         """Ferme les sockets réseau."""
