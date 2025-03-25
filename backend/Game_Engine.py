@@ -173,6 +173,8 @@ class GameEngine:
                         self.last_state_update = self.current_time
                         if len(self.network_manager.remote_players) > len(self.visitors):
                             self.visitors = list(self.network_manager.remote_players.values())
+                            for ia in self.ias:
+                                ia.players = self.visitors + self.players
                             #print(f"New players connected: {self.visitors}")
                             #print(self.visitors[0].units)
                             #print(self.players)
