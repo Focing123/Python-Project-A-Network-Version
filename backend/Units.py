@@ -271,7 +271,7 @@ class Unit:
     def kill_unit(cls, player, unit_to_kill, game_map):
         if unit_to_kill in player.units:
             player.units.remove(unit_to_kill)  # Remove the unit from the player's list of units
-            if unit_to_kill in player.ai.defending_units:
+            if player.ai and unit_to_kill in player.ai.defending_units:
                 player.ai.defending_units.remove(unit_to_kill)
             player.population -= 1  # Decrease the player's population
             x, y = unit_to_kill.position
@@ -328,10 +328,11 @@ class Villager(Unit):
 # Swordsman Class
 class Swordsman(Unit):
     cost = {"Wood": 50, "Gold": 20}
-    def __init__(self, player):
+    def __init__(self, player, position):
         super().__init__(player, hp=40, cost={"Food": 50, "Gold": 20}, attack=4, speed=0.9 * Unit.global_speed, symbol="s", training_time=20 / Unit.global_speed)
         self.range = 0.99
         self.task = None
+        self.position = position
         self.name = "Swordsman"
         self.is_acting = None
         self.sprite = "swordman"
@@ -368,12 +369,13 @@ class Horseman(Unit):
 # Archer Class
 class Archer(Unit):
     cost = {"Wood": 30, "Gold": 40}
-    def __init__(self, player):
+    def __init__(self, player, position):
         super().__init__(player, hp=30, cost={"Wood": 25, "Gold": 45}, attack=4, speed=1 * Unit.global_speed, symbol="a", training_time=35 / Unit.global_speed)
         self.range = 4  # Archers have a range of 4 tiles
         self.task = None
         self.name = "Archer"
         self.is_acting = None
+        self.position = position
         self.sprite = "archer"
         self.sprite_height = 54
         self.z = 64

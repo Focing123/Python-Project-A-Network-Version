@@ -46,7 +46,7 @@ def debug_print(message, color='White'):
                 debug_ps.stdin.flush()
 
             # Écrire l'en-tête dans le fichier de log
-            with open(log_file_path, 'a') as log_file:
+            with open(log_file_path, 'a', encoding='utf-8') as log_file:
                 log_file.write(f"Game Log (session: {session_date})\n")
 
             header_printed = True
