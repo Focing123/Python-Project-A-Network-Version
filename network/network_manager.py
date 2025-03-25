@@ -8,6 +8,7 @@ from backend.logger import debug_print
 from frontend.Terrain import Gold, Wood  # Assurez-vous que le chemin d'import est correct
 from backend.Units import *
 from backend.Units import Villager, Swordsman, Horseman, Archer, Unit
+from backend.Building import *
 
 # Ports de communication avec le programme C
 PY_TO_C_PORT = 6000      # Port où le process C reçoit les données venant du Python
@@ -165,6 +166,13 @@ class NetworkManager:
 
     def apply_state_to_game(self, payload, sender_addr=None):
         """Met à jour la map locale à partir du payload."""
+        source_ip = payload.get("source_ip", sender_addr[0] if sender_addr else "unknown")
+        
+        # Ne pas appliquer les données reçues de sa propre IP
+        if source_ip == self.local_ip:
+            debug_print(f"Ignoré les données reçues de l'IP locale: {source_ip}")
+            return
+
         map_state = payload.get("map", {})
         if self.local_map is not None:
             # MàJ des ressources
@@ -184,7 +192,7 @@ class NetworkManager:
                         self.local_map.resources[resource_type] = []
                     if (x, y) not in self.local_map.resources[resource_type]:
                         self.local_map.resources[resource_type].append((x, y))
-                        debug_print(f"Nouvelle ressource ajoutée de type {resource_type} à ({x}, {y}) avec quantité {amount}")
+                        #debug_print(f"Nouvelle ressource ajoutée de type {resource_type} à ({x}, {y}) avec quantité {amount}")
                         # Créer et placer la ressource sur la grille
                         if y < len(self.local_map.grid) and x < len(self.local_map.grid[y]):
                             resource_obj = Gold() if resource_type == "Gold" else Wood() if resource_type == "Wood" else None
@@ -194,7 +202,6 @@ class NetworkManager:
 
             # MàJ des joueurs et de leurs unités
             players_state = payload.get("players", [])
-            source_ip = payload.get("source_ip", sender_addr[0] if sender_addr else "unknown")
             
             for player in players_state:
                 # Utiliser l'IP source comme identifiant unique
@@ -306,9 +313,59 @@ class NetworkManager:
                                 tile.unit = []
                             tile.unit.append(unit)
                             remote_player.units[unit_id] = unit
-                            debug_print(f"Nouvelle unité {unit_id} ajoutée dans la tile ({x}, {y}) pour le joueur {remote_player.name}.")
-                            debug_print(f"GGGGGGGGGGGGGGGGGGGGGGG {self.remote_players}")
-                            debug_print(remote_player.units)
+                            #debug_print(f"Nouvelle unité {unit_id} ajoutée dans la tile ({x}, {y}) pour le joueur {remote_player.name}.")
+                        
+                # MàJ des bâtiments
+                buildings_state = player.get("buildings", [])
+                for building_state in buildings_state:
+                    building_name = building_state.get("name")
+                    position = building_state.get("position")
+                    hp = building_state.get("hp")
+                    is_attacked = building_state.get("is_attacked", False)
+
+                    if not building_name or not position:
+                        continue
+
+                    # Vérifier si le bâtiment existe déjà à cette position
+                    x, y = position
+                    existing_building = None
+                    if 0 <= y < len(self.local_map.grid) and 0 <= x < len(self.local_map.grid[y]):
+                        tile = self.local_map.grid[y][x]
+                        if hasattr(tile, 'building') and tile.building:
+                            existing_building = tile.building
+
+                    if not existing_building:
+                        # Créer et placer le nouveau bâtiment
+                        building = None
+                        if building_name == "TownCenter":
+                            building_cls = TownCenter
+                        elif building_name == "Barracks":
+                            building_cls = Barracks
+                        elif building_name == "Stable":
+                            building_cls = Stable
+                        elif building_name == "ArcheryRange":
+                            building_cls = ArcheryRange
+                        elif building_name == "Farm":
+                            building_cls = Farm
+                        elif building_name == "House":
+                            building_cls = House
+                        elif building_name == "Keep":
+                            building_cls = Keep
+                        elif building_name == "Camp":
+                            building_cls = Camp
+                        if building_cls:    
+                            building = building_cls()
+                        if building:
+                            building.position = position
+                            building.hp = hp
+                            building.is_attacked = is_attacked
+                            # Utiliser la méthode place_building de la map
+                            self.local_map.place_building(building, position[0], position[1])
+                            print(f"Nouvelle construction {building_name} ajoutée dans la tile ({x}, {y}) pour le joueur {remote_player.name}.")
+                    else:
+                        # Mettre à jour les attributs du bâtiment existant
+                        existing_building.hp = hp
+                        existing_building.is_attacked = is_attacked
 
     def close(self):
         """Ferme les sockets réseau."""
@@ -322,6 +379,5 @@ class RemotePlayer:
         if name is None:
             self.name = f"Remote-{addr[0]}:{addr[1]}"
         else:
-            debug_print("***************************************")
             self.name = name
         self.id = abs(hash(self.name)) % 100
