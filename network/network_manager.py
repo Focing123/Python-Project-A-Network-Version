@@ -364,12 +364,7 @@ class NetworkManager:
                         # Retirer le bâtiment de sa tile
                         if hasattr(building, "position"):
                             x, y = building.position
-                            building_class = building.__class__
-                            print(building_class)
-                            print(building_class.size)
-                            for i in range(building_class.size):    
-                                for j in range(building_class.size):
-                                    self.local_map.grid[y + j][x + i].building = None
+                            self.local_map.remove_building(int(x), int(y), building)
                             print(f"Building {building.name} removed from tile ({x}, {y})")
                         else:
                             print(f"Building {building.name} has no position attribute")
