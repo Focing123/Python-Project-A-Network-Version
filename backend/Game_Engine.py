@@ -174,6 +174,8 @@ class GameEngine:
                         if len(self.network_manager.remote_players) > len(self.visitors):
                             self.visitors = list(self.network_manager.remote_players.values())
                             #print(f"New players connected: {self.visitors}")
+                            #print(self.visitors[0].units)
+                            #print(self.players)
                     
 
                 # Handle input

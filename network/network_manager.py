@@ -245,11 +245,9 @@ class NetworkManager:
                 
                 # Nettoyer les unités qui n'existent plus
                 units_to_remove = []
-                for unit_id, unit in remote_player.units.items():
-                    if any(u_state.get("id") == unit_id for u_state in units_state):
-                        existing_unit_ids.add(unit_id)
-                    else:
-                        units_to_remove.append(unit_id)
+                for unit in remote_player.units:
+                    if not any(u_state.get("id") == unit.id for u_state in units_state):
+                        units_to_remove.append(unit)
                         # Retirer l'unité de sa tile actuelle
                         if hasattr(unit, "position"):
                             x, y = unit.position
@@ -259,8 +257,8 @@ class NetworkManager:
                                     tile.unit.remove(unit)
 
                 # Supprimer les unités qui n'existent plus
-                for unit_id in units_to_remove:
-                    del remote_player.units[unit_id]
+                for unit in units_to_remove:
+                    remote_player.units.remove(unit)
 
                 # Mettre à jour ou créer les unités
                 for unit_state in units_state:
@@ -274,7 +272,7 @@ class NetworkManager:
 
                     x, y = pos
                     # Vérifier si l'unité existe déjà
-                    existing_unit = remote_player.units.get(unit_id)
+                    existing_unit = next((u for u in remote_player.units if u.id == unit_id), None)
                     
                     if existing_unit:
                         # Mettre à jour l'unité existante
@@ -331,7 +329,7 @@ class NetworkManager:
                             if not hasattr(tile, "unit") or tile.unit is None:
                                 tile.unit = []
                             tile.unit.append(unit)
-                            remote_player.units[unit_id] = unit
+                            remote_player.units.append(unit)
                             #debug_print(f"Nouvelle unité {unit_id} ajoutée dans la tile ({x}, {y}) pour le joueur {remote_player.name}.")
                         
                 # MàJ des bâtiments
@@ -559,7 +557,8 @@ class NetworkManager:
 class RemotePlayer:
     def __init__(self, addr, name=None):
         self.addr = addr
-        self.units = {}
+        self.units = []  # Changed from dict to list
+        self.buildings = []
         if name is None:
             self.name = f"Remote-{addr[0]}:{addr[1]}"
         else:
