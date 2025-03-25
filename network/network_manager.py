@@ -360,8 +360,10 @@ class NetworkManager:
                         # Retirer le bâtiment de sa tile
                         if hasattr(building, "position"):
                             x, y = building.position
-                            for j in range(building.size[1]):
-                                for i in range(building.size[0]):
+                            building_class = type(building)
+                            building_size = getattr(building_class, 'size', (1, 1))
+                            for j in range(building_size[1]):
+                                for i in range(building_size[0]):
                                     if 0 <= y + j < len(self.local_map.grid) and 0 <= x + i < len(self.local_map.grid[y + j]):
                                         tile = self.local_map.grid[y + j][x + i]
                                         if hasattr(tile, 'building'):
