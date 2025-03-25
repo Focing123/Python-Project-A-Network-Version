@@ -76,6 +76,7 @@ class NetworkManager:
                     "buildings": [
                         {
                             "name": getattr(b, "name", None),
+                            "class": b.__class__.__name__,
                             "hp": getattr(b, "hp", None),
                             "position": getattr(b, "position", None),
                             "is_attacked": getattr(b, "is_attacked", False)
@@ -124,7 +125,7 @@ class NetworkManager:
         except socket.error as e:
             debug_print(f"Erreur lors de l'envoi UDP: {e}")
 
-    def receive_game_state(self, timeout=0.1, applystate = True):  # Increase timeout to 100ms
+    def receive_game_state(self, timeout=0.1,applystate = True):  # Increase timeout to 100ms
         self.recv_socket.settimeout(timeout)
         fragments = {}
         try:
@@ -147,7 +148,7 @@ class NetworkManager:
                             payload = pickle.loads(decompressed_data)
                             
                             if payload.get("type") == "game_data":
-                                if applystate :
+                                if applystate:
                                     self.apply_state_to_game(payload, sender_addr=addr)
                                 return payload
                     else:
@@ -156,7 +157,7 @@ class NetworkManager:
                         payload = pickle.loads(decompressed_data)
                         
                         if payload.get("type") == "game_data":
-                            if applystate :
+                            if applystate:
                                 self.apply_state_to_game(payload, sender_addr=addr)
                             return payload
                             
@@ -204,6 +205,14 @@ class NetworkManager:
 
             # MàJ des joueurs et de leurs unités
             players_state = payload.get("players", [])
+
+            unit_mapping = {
+                    "Villager": Villager,
+                    "Swordsman": Swordsman,
+                    "Horseman": Horseman,
+                    "Archer": Archer,
+                    "Unit": Unit
+                }
             
             for player in players_state:
                 # Utiliser l'IP source comme identifiant unique
@@ -214,14 +223,7 @@ class NetworkManager:
                     remote_player = RemotePlayer((source_ip, 0), name=f"Remote-{source_ip}-{player.get('id')}")
                     remote_player.id = player.get("id") or remote_player.id
                     self.remote_players[player_key] = remote_player
-
-                unit_mapping = {
-                    "Villager": Villager,
-                    "Swordsman": Swordsman,
-                    "Horseman": Horseman,
-                    "Archer": Archer,
-                    "Unit": Unit
-                }
+                
                 units_state = player.get("units", [])
                 # Créer un set pour suivre les unités existantes
                 existing_unit_ids = set()
@@ -319,6 +321,40 @@ class NetworkManager:
                         
                 # MàJ des bâtiments
                 buildings_state = player.get("buildings", [])
+                building_mapping = {
+                    "TownCenter": TownCenter,
+                    "Barracks": Barracks,
+                    "Stable": Stable,
+                    "ArcheryRange": ArcheryRange,
+                    "Farm": Farm,   
+                    "House": House,
+                    "Keep": Keep,
+                    "Camp": Camp
+                }
+
+                # Nettoyer les bâtiments qui n'existent plus
+                buildings_to_remove = []
+                for building in remote_player.buildings if hasattr(remote_player, 'buildings') else []:
+                    if not any(b_state.get("position") == building.position for b_state in buildings_state):
+                        buildings_to_remove.append(building)
+                        # Retirer le bâtiment de sa tile
+                        if hasattr(building, "position"):
+                            x, y = building.position
+                            if 0 <= y < len(self.local_map.grid) and 0 <= x < len(self.local_map.grid[y]):
+                                tile = self.local_map.grid[y][x]
+                                if hasattr(tile, 'building'):
+                                    tile.building = None
+
+                # Supprimer les bâtiments qui n'existent plus
+                for building in buildings_to_remove:
+                    if hasattr(remote_player, 'buildings'):
+                        remote_player.buildings.remove(building)
+
+                # Initialiser la liste des bâtiments si elle n'existe pas
+                if not hasattr(remote_player, 'buildings'):
+                    remote_player.buildings = []
+
+                # Mettre à jour ou créer les bâtiments
                 for building_state in buildings_state:
                     building_name = building_state.get("name")
                     position = building_state.get("position")
@@ -328,46 +364,53 @@ class NetworkManager:
                     if not building_name or not position:
                         continue
 
-                    # Vérifier si le bâtiment existe déjà à cette position
                     x, y = position
+                    # Vérifier si le bâtiment existe déjà à cette position
                     existing_building = None
-                    if 0 <= y < len(self.local_map.grid) and 0 <= x < len(self.local_map.grid[y]):
-                        tile = self.local_map.grid[y][x]
-                        if hasattr(tile, 'building') and tile.building:
-                            existing_building = tile.building
+                    for building in remote_player.buildings:
+                        if building.position == position:
+                            existing_building = building
+                            break
 
-                    if not existing_building:
-                        # Créer et placer le nouveau bâtiment
-                        building = None
-                        if building_name == "TownCenter":
-                            building_cls = TownCenter
-                        elif building_name == "Barracks":
-                            building_cls = Barracks
-                        elif building_name == "Stable":
-                            building_cls = Stable
-                        elif building_name == "ArcheryRange":
-                            building_cls = ArcheryRange
-                        elif building_name == "Farm":
-                            building_cls = Farm
-                        elif building_name == "House":
-                            building_cls = House
-                        elif building_name == "Keep":
-                            building_cls = Keep
-                        elif building_name == "Camp":
-                            building_cls = Camp
-                        if building_cls:    
-                            building = building_cls()
-                        if building:
-                            building.position = position
-                            building.hp = hp
-                            building.is_attacked = is_attacked
-                            # Utiliser la méthode place_building de la map
-                            self.local_map.place_building(building, position[0], position[1])
-                            print(f"Nouvelle construction {building_name} ajoutée dans la tile ({x}, {y}) pour le joueur {remote_player.name}.")
-                    else:
-                        # Mettre à jour les attributs du bâtiment existant
+                    if existing_building:
+                        # Mettre à jour le bâtiment existant
                         existing_building.hp = hp
                         existing_building.is_attacked = is_attacked
+                    else:
+                        # Créer un nouveau bâtiment
+                        building_cls = building_mapping.get(building_name)
+                        if building_cls:
+                            new_building = building_cls(player=remote_player)
+                            new_building.position = position
+                            new_building.hp = hp
+                            new_building.is_attacked = is_attacked
+
+                            # Placer le bâtiment sur toutes les tuiles qu'il occupe
+                            size = new_building.size
+                            can_place = True
+                            
+                            # Vérifier que toutes les tuiles sont disponibles
+                            for dy in range(size):
+                                for dx in range(size):
+                                    check_y = y + dy
+                                    check_x = x + dx
+                                    if not (0 <= check_y < len(self.local_map.grid) and 
+                                          0 <= check_x < len(self.local_map.grid[0])):
+                                        can_place = False
+                                        break
+                                    if hasattr(self.local_map.grid[check_y][check_x], 'building') and \
+                                       self.local_map.grid[check_y][check_x].building is not None:
+                                        can_place = False
+                                        break
+
+                            if can_place:
+                                # Placer le bâtiment sur toutes les tuiles
+                                for dy in range(size):
+                                    for dx in range(size):
+                                        tile = self.local_map.grid[y + dy][x + dx]
+                                        tile.building = new_building
+                                remote_player.buildings.append(new_building)
+                                #debug_print(f"New building {building_name} added at ({x}, {y}) with size {size}x{size}")
 
     def close(self):
         """Ferme les sockets réseau."""
