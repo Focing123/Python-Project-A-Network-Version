@@ -8,6 +8,7 @@ import math
 from backend.Starter_File import players as players_list
 from logger import debug_print
 from Starter_File import global_speedS
+import uuid
 
 # Building Class
 class Building:
@@ -26,6 +27,91 @@ class Building:
         self.nb_workers = None # Number of workers for the building --> impact building time
         self.max_hp = hp
         self.is_attacked = False
+
+         # Ajouter un ID réseau unique
+        self.network_id = str(uuid.uuid4())
+        self.network_owner = player.id if hasattr(player, 'id') else None
+        
+    def get_network_state(self):
+        """Retourne l'état réseau complet du bâtiment"""
+        return {
+            # Identifiants
+            "network_id": self.network_id,
+            "network_owner": self.network_owner,
+            "name": self.name,
+            "player_id": self.player.id if hasattr(self.player, "id") else None,
+            
+            # Attributs physiques
+            "position": self.position,
+            "size": self.size,
+            "symbol": self.symbol,
+            
+            # État actuel
+            "hp": self.hp,
+            "max_hp": self.max_hp,
+            "is_attacked": self.is_attacked,
+            "built": self.built,
+            
+            # File de production
+            "training_queue": [unit.name if hasattr(unit, "name") else str(unit) 
+                              for unit in getattr(self, "training_queue", [])],
+            
+            # Construction
+            "build_time": self.build_time,
+            "nb_workers": getattr(self, "nb_workers", None),
+            
+            # Capacités spéciales
+            "population_increase": self.population_increase,
+            
+            # Spécifique aux bâtiments de défense
+            "attack": getattr(self, "attack", 0),
+            "range": getattr(self, "range", 0),
+            "last_attack_time": getattr(self, "last_attack_time", 0),
+            "target": getattr(self, "target", None),
+            
+            # Spécifique aux fermes
+            "food": getattr(self, "food", 0),
+            "is_farmed": getattr(self, "is_farmed", False)
+        }
+        
+    def apply_network_state(self, state):
+        """Applique l'état réseau complet au bâtiment"""
+        # Ne pas modifier l'ID réseau ou le propriétaire
+        # Attributs physiques (statiques)
+        # Position fixe, pas besoin de mise à jour
+        
+        # État actuel
+        if state.get("hp") is not None:
+            self.hp = state["hp"]
+        if state.get("max_hp") is not None:
+            self.max_hp = state["max_hp"]
+        if state.get("is_attacked") is not None:
+            self.is_attacked = state["is_attacked"]
+        if state.get("built") is not None:
+            self.built = state["built"]
+        
+        # File de production (synchroniser uniquement si non vide)
+        if state.get("training_queue") and hasattr(self, "training_queue"):
+            # Ne synchronisons que la présence/absence d'unités, pas les objets spécifiques
+            if len(state["training_queue"]) != len(self.training_queue):
+                # Mise à jour nécessaire de la file
+                debug_print(f"Building {self.name} training queue updated from network")
+        
+        # Construction
+        if state.get("nb_workers") is not None and hasattr(self, "nb_workers"):
+            self.nb_workers = state["nb_workers"]
+        
+        # Capacités spéciales des bâtiments
+        if hasattr(self, "food") and state.get("food") is not None:
+            self.food = state["food"]
+        if hasattr(self, "is_farmed") and state.get("is_farmed") is not None:
+            self.is_farmed = state["is_farmed"]
+        
+        # Pour les tours/défenses
+        if hasattr(self, "target") and state.get("target") is not None:
+            self.target = state["target"]
+        if hasattr(self, "last_attack_time") and state.get("last_attack_time") is not None:
+            self.last_attack_time = state["last_attack_time"]
 
     def __str__(self):
         return self.symbol  # Ensure the building is represented by just the symbol

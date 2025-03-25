@@ -33,16 +33,43 @@ class GameEngine:
         self.map_size = map_size
         self.players = players
         self.visitors = []
+        
+        # Initialiser la carte AVANT le NetworkManager
+        self.map = Map(*map_size)
+        
         # Initialisation du gestionnaire réseau
         if self.network:
             self.network_manager = NetworkManager(peer_to_peer=self.network)
+            self.network_manager.local_map = self.map  # Maintenant self.map existe
+            self.network_manager.game_engine = self
+            
+            # Initialiser le gestionnaire de propriétés réseau
+            if hasattr(self.network_manager, 'properties_manager'):
+                # Définir l'ID du joueur local
+                local_player_id = self.players[0].id if self.players else None
+                self.network_manager.properties_manager.local_player_id = local_player_id
+                
+                # Enregistrer les objets initiaux
+                for player in self.players:
+                    # Vérifier si units est un dictionnaire ou une liste
+                    if hasattr(player, 'units'):
+                        if isinstance(player.units, dict):
+                            for unit_id, unit in player.units.items():
+                                if hasattr(unit, 'network_id'):
+                                    self.network_manager.properties_manager.register_object(
+                                        unit.network_id, player.id)
+                        else:
+                            # Si units est une liste
+                            for unit in player.units:
+                                if hasattr(unit, 'network_id'):
+                                    self.network_manager.properties_manager.register_object(
+                                        unit.network_id, player.id)
+                    
+                    for building in player.buildings:
+                        self.network_manager.properties_manager.register_object(
+                            building.network_id, player.id)
         else:
             self.network_manager = None
-
-        # Initialization de la carte en fonction du rôle réseau : le serveur initialise la carte, le client attend son état
-        self.map = Map(*map_size)
-        if self.network:
-            self.network_manager.local_map = self.map
         
         self.turn = 0
         self.is_paused = False  # Flag pour vérifier si le jeu est en pause
@@ -128,13 +155,22 @@ class GameEngine:
                 if not self.is_paused:
                     self.current_time = time.time()
 
-                # In your game loop, add this at the beginning or right after processing events
-                if self.network == True and self.network_manager and self.current_time - self.last_state_update >= self.state_update_interval:
-                    self.send_multiplayer_state()  # Send game state to other players
-                    self.network_manager.receive_game_state()  # Receive game state from other players
-                    if self.map.grid != self.network_manager.local_map.grid or self.map.resources != self.network_manager.local_map.resources:
-                        self.map = self.network_manager.local_map
-                    self.last_state_update = self.current_time
+                # Gestion du réseau
+                if self.network == True and self.network_manager:
+                    # Traiter la file de messages réseau
+                    if hasattr(self.network_manager, 'properties_manager'):
+                        self.network_manager.properties_manager.process_message_queue()
+                    
+                    # Mise à jour des propriétés des objets
+                    self.update_network_object_properties()
+                    
+                    # Code existant pour l'envoi et la réception d'états
+                    if self.current_time - self.last_state_update >= self.state_update_interval:
+                        self.send_multiplayer_state()
+                        self.network_manager.receive_game_state()
+                        if self.map.grid != self.network_manager.local_map.grid or self.map.resources != self.network_manager.local_map.resources:
+                            self.map = self.network_manager.local_map
+                        self.last_state_update = self.current_time
 
                 # Handle input
                 curses.curs_set(0)  # Hide cursor
@@ -386,6 +422,51 @@ class GameEngine:
         if self.network_manager:
             # Tous les joueurs doivent envoyer leur état
             self.network_manager.send_game_state(self)
+
+    def update_network_object_properties(self):
+        """Met à jour les propriétés réseau des objets du jeu"""
+        if not hasattr(self.network_manager, 'properties_manager'):
+            return
+            
+        # Pour chaque unité et bâtiment local dont nous sommes propriétaire
+        for player in self.players:
+            if player.id == self.network_manager.properties_manager.local_player_id:
+                # Unités
+                if hasattr(player, 'units'):
+                    if isinstance(player.units, dict):
+                        # Si units est un dictionnaire
+                        for unit_id, unit in player.units.items():
+                            if hasattr(unit, 'network_id'):
+                                # Si l'unité a été modifiée depuis la dernière mise à jour
+                                if hasattr(unit, 'is_moving') and (unit.is_moving or 
+                                   hasattr(unit, 'is_attacked_by') and unit.is_attacked_by or 
+                                   hasattr(unit, 'target_attack') and unit.target_attack):
+                                    # Obtenir l'état et l'envoyer
+                                    state = unit.get_network_state()
+                                    self.network_manager.properties_manager.send_state_update(
+                                        unit.network_id, state)
+                    else:
+                        # Si units est une liste
+                        for unit in player.units:
+                            if hasattr(unit, 'network_id'):
+                                # Si l'unité a été modifiée depuis la dernière mise à jour
+                                if hasattr(unit, 'is_moving') and (unit.is_moving or 
+                                   hasattr(unit, 'is_attacked_by') and unit.is_attacked_by or 
+                                   hasattr(unit, 'target_attack') and unit.target_attack):
+                                    # Obtenir l'état et l'envoyer
+                                    state = unit.get_network_state()
+                                    self.network_manager.properties_manager.send_state_update(
+                                        unit.network_id, state)
+                # Bâtiments (code inchangé)
+                for building in player.buildings:
+                    if hasattr(building, 'network_id'):
+                        # If building was modified since last update
+                        if (hasattr(building, 'is_under_construction') and building.is_under_construction or
+                            hasattr(building, 'is_attacked') and building.is_attacked):
+                            # Get state and send it
+                            state = building.get_network_state()
+                            self.network_manager.properties_manager.send_state_update(
+                                building.network_id, state)
 
     def __del__(self):
         """Destructeur pour fermer proprement les connexions"""

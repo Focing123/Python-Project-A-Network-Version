@@ -479,8 +479,11 @@ class NetworkManager:
 
     def apply_object_state(self, obj_id, state):
         """Applique l'état reçu à l'objet correspondant"""
-        # Stocker l'état
-        self.object_states[obj_id] = state
+        # Résoudre les références entre objets avant d'appliquer l'état
+        resolved_state = self.resolve_object_references(state)
+        
+        # Stocker l'état résolu
+        self.object_states[obj_id] = resolved_state
         
         # Chercher l'objet et appliquer l'état
         if hasattr(self, 'game_engine'):
@@ -488,17 +491,70 @@ class NetworkManager:
                 # Chercher dans les unités
                 for unit_id, unit in player.units.items():
                     if hasattr(unit, 'network_id') and unit.network_id == obj_id:
-                        unit.apply_network_state(state)
+                        unit.apply_network_state(resolved_state)
                         return True
                 
                 # Chercher dans les bâtiments
                 for building in player.buildings:
                     if hasattr(building, 'network_id') and building.network_id == obj_id:
-                        building.apply_network_state(state)
+                        building.apply_network_state(resolved_state)
                         return True
         
-        # L'objet n'a pas été trouvé, on stocke juste l'état pour plus tard
         return False
+
+    def resolve_object_references(self, state):
+        """Résout les références d'objets à partir de leurs IDs"""
+        if not hasattr(self, 'object_references'):
+            self.object_references = {}
+        
+        if not isinstance(state, dict):
+            return state
+        
+        # Copier l'état pour éviter de modifier l'original
+        resolved_state = state.copy()
+        
+        # Parcourir les attributs qui sont des objets
+        for key, value in state.items():
+            if isinstance(value, dict):
+                # Si c'est un dictionnaire avec network_id, c'est une référence
+                if 'network_id' in value:
+                    obj_id = value['network_id']
+                    ref_obj = self.find_object_by_id(obj_id)
+                    if ref_obj:
+                        resolved_state[key] = ref_obj
+                        self.object_references[obj_id] = ref_obj
+                    else:
+                        # Résoudre récursivement ce sous-objet
+                        resolved_state[key] = self.resolve_object_references(value)
+                else:
+                    # C'est un dictionnaire ordinaire, résoudre récursivement
+                    resolved_state[key] = self.resolve_object_references(value)
+            elif isinstance(value, list):
+                # Si c'est une liste, résoudre chaque élément
+                resolved_state[key] = [self.resolve_object_references(item) for item in value]
+        
+        return resolved_state
+
+    def find_object_by_id(self, obj_id):
+        """Trouve un objet à partir de son ID réseau"""
+        # Chercher dans les objets déjà référencés
+        if hasattr(self, 'object_references') and obj_id in self.object_references:
+            return self.object_references[obj_id]
+        
+        # Chercher dans tous les objets du jeu
+        if hasattr(self, 'game_engine'):
+            for player in self.game_engine.players:
+                # Chercher dans les unités
+                for unit_id, unit in player.units.items():
+                    if hasattr(unit, 'network_id') and unit.network_id == obj_id:
+                        return unit
+                
+                # Chercher dans les bâtiments
+                for building in player.buildings:
+                    if hasattr(building, 'network_id') and building.network_id == obj_id:
+                        return building
+        
+        return None
 
 class RemotePlayer:
     def __init__(self, addr, name=None):
@@ -609,9 +665,22 @@ class NetworkPropertiesManager:
             obj_id = message["object_id"]
             state = message["state"]
             
+            # Résoudre les références avant d'appliquer l'état
+            resolved_state = self.network_manager.resolve_object_references(state)
+            
             # Appliquer la mise à jour si nous ne sommes pas le propriétaire
             if obj_id in self.owners and self.owners[obj_id] != self.local_player_id:
-                self.network_manager.apply_object_state(obj_id, state)
+                self.network_manager.apply_object_state(obj_id, resolved_state)
+                
+        elif message["type"] == "full_sync":
+            # Synchronisation complète
+            objects = message.get("objects", {})
+            for obj_id, state in objects.items():
+                # Résoudre les références pour chaque objet
+                resolved_state = self.network_manager.resolve_object_references(state)
+                # Appliquer si nous ne sommes pas propriétaire
+                if obj_id in self.owners and self.owners[obj_id] != self.local_player_id:
+                    self.network_manager.apply_object_state(obj_id, resolved_state)
                 
     def send_state_update(self, obj_id, state):
         """Envoie une mise à jour d'état d'un objet"""

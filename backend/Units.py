@@ -3,6 +3,7 @@ import math
 from Building import TownCenter
 from logger import debug_print
 from Starter_File import global_speedS
+import uuid
 
 # Unit Class
 class Unit:
@@ -26,6 +27,108 @@ class Unit:
         self.frame_counter = 0 
         self.is_moving = False
 
+        # Ajouter un ID réseau unique pour chaque unité
+        self.network_id = str(uuid.uuid4())
+        self.network_owner = player.id if hasattr(player, 'id') else None
+
+    def get_network_state(self):
+        """Retourne l'état réseau complet de l'unité"""
+        state = {
+            # Identifiants
+            "network_id": self.network_id,
+            "network_owner": self.network_owner,
+            "name": getattr(self, "name", self.__class__.__name__),
+            "player_id": self.player.id if hasattr(self.player, "id") else None,
+            "symbol": self.symbol,
+            
+            # Position et mouvement
+            "position": self.position,
+            "target_position": self.target_position,
+            "direction": self.direction,
+            "is_moving": getattr(self, "is_moving", False),
+            "speed": self.speed,
+            
+            # Combat
+            "hp": self.hp,
+            "max_hp": getattr(self, "max_hp", self.hp),
+            "attack": self.attack,
+            "target_attack": self.target_attack,
+            "is_attacked_by": self.is_attacked_by,
+            "range": getattr(self, "range", 1),
+            
+            # Animation
+            "current_frame": getattr(self, "current_frame", 0),
+            "frame_counter": getattr(self, "frame_counter", 0),
+            
+            # Tâche actuelle
+            "task": getattr(self, "task", None),
+            "is_acting": getattr(self, "is_acting", None),
+            
+            # Spawn
+            "spawn_building": getattr(self, "spawn_building", None),
+            "spawn_position": getattr(self, "spawn_position", None),
+        }
+        
+        # Attributs spécifiques aux villageois
+        if hasattr(self, "carrying"):
+            state["carrying"] = self.carrying
+        if hasattr(self, "target_resource"):
+            state["target_resource"] = self.target_resource
+        if hasattr(self, "last_gathered"):
+            state["last_gathered"] = self.last_gathered
+        
+        # Attributs spécifiques aux archers
+        if hasattr(self, "arrow_progress"):
+            state["arrow_progress"] = self.arrow_progress
+        
+        return state
+        
+    def apply_network_state(self, state):
+        """Applique l'état réseau complet à l'unité"""
+        # Position et mouvement
+        if state.get("position"):
+            self.position = state["position"]
+        if state.get("target_position"):
+            self.target_position = state["target_position"]
+        if state.get("direction"):
+            self.direction = state["direction"]
+        if state.get("is_moving") is not None and hasattr(self, "is_moving"):
+            self.is_moving = state["is_moving"]
+        
+        # Combat
+        if state.get("hp") is not None:
+            self.hp = state["hp"]
+        if state.get("max_hp") is not None and hasattr(self, "max_hp"):
+            self.max_hp = state["max_hp"]
+        if state.get("target_attack") is not None:
+            self.target_attack = state["target_attack"]
+        if state.get("is_attacked_by") is not None:
+            self.is_attacked_by = state["is_attacked_by"]
+        
+        # Animation
+        if state.get("current_frame") is not None and hasattr(self, "current_frame"):
+            self.current_frame = state["current_frame"]
+        if state.get("frame_counter") is not None and hasattr(self, "frame_counter"):
+            self.frame_counter = state["frame_counter"]
+        
+        # Tâche
+        if state.get("task") is not None and hasattr(self, "task"):
+            self.task = state["task"]
+        if state.get("is_acting") is not None and hasattr(self, "is_acting"):
+            self.is_acting = state["is_acting"]
+        
+        # Attributs spécifiques aux villageois
+        if state.get("carrying") is not None and hasattr(self, "carrying"):
+            self.carrying = state["carrying"]
+        if state.get("target_resource") is not None and hasattr(self, "target_resource"):
+            self.target_resource = state["target_resource"]
+        if state.get("last_gathered") is not None and hasattr(self, "last_gathered"):
+            self.last_gathered = state["last_gathered"]
+        
+        # Attributs spécifiques aux archers
+        if state.get("arrow_progress") is not None and hasattr(self, "arrow_progress"):
+            self.arrow_progress = state["arrow_progress"]
+    
     def __str__(self):
         return self.symbol  # Ensure the building is represented by just the symbol
     
