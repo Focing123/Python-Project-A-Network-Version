@@ -6,6 +6,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <time.h>
+#include <stdarg.h>
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -164,7 +165,25 @@ int main(int argc, char* argv[]) {
     memset(&addr_broadcast_send, 0, sizeof(addr_broadcast_send));
     addr_broadcast_send.sin_family = AF_INET;
     addr_broadcast_send.sin_port = htons(BROADCAST_PORT);
-    addr_broadcast_send.sin_addr.s_addr = inet_addr("192.168.31.255");
+    // Obtenir automatiquement l'adresse de broadcast de l'interface WIFI
+    INTERFACE_INFO interfaceList[20];
+    unsigned long bytesReturned;
+    if (WSAIoctl(sock_broadcast, SIO_GET_INTERFACE_LIST, 0, 0, &interfaceList, sizeof(interfaceList), &bytesReturned, 0, 0) == SOCKET_ERROR) {
+        debug_print("Erreur lors de la récupération de la liste des interfaces: %d\n", WSAGetLastError());
+        closesocket(sock_recv);
+        closesocket(sock_broadcast);
+        WSACleanup();
+        return 1;
+    }
+
+    int nInterfaces = bytesReturned / sizeof(INTERFACE_INFO);
+    for (int i = 0; i < nInterfaces; i++) {
+        if (interfaceList[i].iiFlags & IFF_UP && interfaceList[i].iiFlags & IFF_BROADCAST) {
+            struct in_addr broadcastAddr = ((struct sockaddr_in*)&interfaceList[i].iiBroadcastAddress)->sin_addr;
+            addr_broadcast_send.sin_addr.s_addr = broadcastAddr.s_addr;
+            break;
+        }
+    }
 
     // Socket pour recevoir les broadcasts
     sock_forward = socket(AF_INET, SOCK_DGRAM, 0);
@@ -226,7 +245,7 @@ int main(int argc, char* argv[]) {
         // Traitement des messages depuis Python
         int recv_len = receiveComplete(sock_recv, buffer, BUFFER_SIZE, (struct sockaddr*)&addr_src, &addr_len);
         if (recv_len > 0) {
-            debug_print("Reçu %d octets depuis Python\n", recv_len);
+            //debug_print("Reçu %d octets depuis Python\n", recv_len);
             // Transférer tel quel vers le broadcast
             forward_message(sock_broadcast, buffer, recv_len, 
                           (struct sockaddr*)&addr_broadcast_send, 
@@ -236,7 +255,7 @@ int main(int argc, char* argv[]) {
         // Traitement des messages broadcast
         recv_len = receiveComplete(sock_forward, buffer, BUFFER_SIZE, (struct sockaddr*)&addr_src, &addr_len);
         if (recv_len > 0) {
-            debug_print("Reçu %d octets en broadcast\n", recv_len);
+            //debug_print("Reçu %d octets en broadcast\n", recv_len);
             // Transférer tel quel vers Python
             forward_message(sock_forward, buffer, recv_len,
                           (struct sockaddr*)&addr_forward,
