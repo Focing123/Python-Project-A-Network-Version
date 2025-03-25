@@ -509,12 +509,6 @@ class RemotePlayer:
         else:
             self.name = name
         self.id = abs(hash(self.name)) % 100
-        # Propriétés supplémentaires pour l'affichage GUI
-        self.owned_resources = {"Wood": 0, "Food": 0, "Gold": 0}
-        self.buildings = []
-        self.name = f"Remote-{addr[0]}" if name is None else name
-        self.id = abs(hash(self.name)) % 100  # Assure un ID unique entre 0 et 99
-        self.sprite = "remote"  # Identifie ce joueur comme distant
 
 class NetworkPropertiesManager:
     """Gère les propriétés réseau des objets du jeu"""
