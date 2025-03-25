@@ -9,6 +9,10 @@ from frontend.Terrain import Gold, Wood  # Assurez-vous que le chemin d'import e
 from backend.Units import *
 from backend.Units import Villager, Swordsman, Horseman, Archer, Unit
 from backend.Building import *
+import threading
+import time
+import heapq
+import uuid
 
 # Ports de communication avec le programme C
 PY_TO_C_PORT = 6000      # Port où le process C reçoit les données venant du Python
@@ -30,6 +34,10 @@ class NetworkManager:
         # les autres parties du code restent inchangées
         self.local_map = None
         self.remote_players = {}  # Dictionnaire: { addr: RemotePlayer }
+        self.properties_manager = NetworkPropertiesManager(self)
+        # Générer un ID unique pour ce nœud réseau
+        self.node_id = str(uuid.uuid4())
+        self.object_states = {}  # Pour stocker les états des objets
 
     def get_local_ip(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -160,6 +168,13 @@ class NetworkManager:
                             if applystate:
                                 self.apply_state_to_game(payload, sender_addr=addr)
                             return payload
+                        
+                        # Ajouter le traitement des messages spécifiques
+                        if packet.get('type') == "network_message":
+                            message_content = packet.get('content')
+                            if message_content and packet.get('node_id') != self.node_id:
+                                self.properties_manager.process_message(message_content)
+                            continue
                             
                 except socket.timeout:
                     return None  # Exit after timeout
@@ -417,6 +432,74 @@ class NetworkManager:
         self.send_socket.close()
         self.recv_socket.close()
 
+    def send_network_message(self, message):
+        """Envoie un message réseau spécifique (différent de l'état complet)"""
+        try:
+            packet = {
+                "type": "network_message",
+                "content": message,
+                "source_ip": self.local_ip,
+                "node_id": self.node_id
+            }
+            
+            # Sérialiser et compresser
+            pickle_payload = pickle.dumps(packet)
+            compressed_payload = zlib.compress(pickle_payload)
+            
+            # Envoi direct si petit paquet
+            network_packet = {
+                'fragment': False,
+                'data': compressed_payload
+            }
+            self.send_socket.sendto(pickle.dumps(network_packet), ("127.0.0.1", PY_TO_C_PORT))
+        except socket.error as e:
+            debug_print(f"Erreur lors de l'envoi du message réseau: {e}")
+
+    def get_object_state(self, obj_id):
+        """Récupère l'état actuel d'un objet"""
+        # Implémenter la logique pour récupérer l'état à partir de l'ID
+        # Exemple simple: chercher dans les objets du jeu
+        if obj_id in self.object_states:
+            return self.object_states[obj_id]
+        
+        # Sinon, chercher dans les unités et bâtiments
+        if hasattr(self, 'game_engine'):
+            for player in self.game_engine.players:
+                # Chercher dans les unités
+                for unit_id, unit in player.units.items():
+                    if unit.network_id == obj_id:
+                        return unit.get_network_state()
+                
+                # Chercher dans les bâtiments
+                for building in player.buildings:
+                    if hasattr(building, 'network_id') and building.network_id == obj_id:
+                        return building.get_network_state()
+        
+        return None
+
+    def apply_object_state(self, obj_id, state):
+        """Applique l'état reçu à l'objet correspondant"""
+        # Stocker l'état
+        self.object_states[obj_id] = state
+        
+        # Chercher l'objet et appliquer l'état
+        if hasattr(self, 'game_engine'):
+            for player in self.game_engine.players:
+                # Chercher dans les unités
+                for unit_id, unit in player.units.items():
+                    if hasattr(unit, 'network_id') and unit.network_id == obj_id:
+                        unit.apply_network_state(state)
+                        return True
+                
+                # Chercher dans les bâtiments
+                for building in player.buildings:
+                    if hasattr(building, 'network_id') and building.network_id == obj_id:
+                        building.apply_network_state(state)
+                        return True
+        
+        # L'objet n'a pas été trouvé, on stocke juste l'état pour plus tard
+        return False
+
 class RemotePlayer:
     def __init__(self, addr, name=None):
         self.addr = addr
@@ -426,3 +509,155 @@ class RemotePlayer:
         else:
             self.name = name
         self.id = abs(hash(self.name)) % 100
+
+class NetworkPropertiesManager:
+    """Gère les propriétés réseau des objets du jeu"""
+    
+    def __init__(self, network_manager):
+        self.network_manager = network_manager
+        self.locks = {}  # ID objet -> verrou
+        self.owners = {}  # ID objet -> propriétaire réseau
+        self.message_queue = []  # File prioritaire pour les messages
+        self.local_player_id = None  # ID du joueur local
+        self.last_sync_time = time.time()
+        self.sync_interval = 5.0  # Synchronisation complète toutes les 5 secondes
+        
+    def register_object(self, obj_id, initial_owner_id):
+        """Enregistre un nouvel objet dans le système avec son propriétaire initial"""
+        if obj_id not in self.locks:
+            self.locks[obj_id] = threading.Lock()
+            self.owners[obj_id] = initial_owner_id
+            return True
+        return False
+        
+    def request_ownership(self, obj_id, requester_id):
+        """Demande la propriété d'un objet"""
+        if obj_id not in self.owners:
+            return False
+            
+        # Si l'objet nous appartient déjà, pas besoin de demander
+        if self.owners[obj_id] == self.local_player_id:
+            return True
+            
+        # Envoyer une demande de propriété via le réseau
+        message = {
+            "type": "ownership_request",
+            "object_id": obj_id,
+            "requester_id": requester_id,
+            "timestamp": time.time()
+        }
+        
+        # Ajouter à la file de messages prioritaires (priorité 0 = élevée)
+        heapq.heappush(self.message_queue, (0, message))
+        
+        # Attendre une réponse (avec timeout)
+        timeout = time.time() + 2.0  # 2 secondes de timeout
+        while time.time() < timeout:
+            if self.owners.get(obj_id) == requester_id:
+                return True
+            time.sleep(0.05)
+        
+        return False
+        
+    def transfer_ownership(self, obj_id, new_owner_id):
+        """Transfère la propriété d'un objet"""
+        if obj_id not in self.owners:
+            return False
+            
+        # Vérifier que nous sommes bien le propriétaire actuel
+        if self.owners[obj_id] != self.local_player_id:
+            return False
+            
+        # Acquérir le verrou avant de modifier la propriété
+        with self.locks[obj_id]:
+            self.owners[obj_id] = new_owner_id
+            
+            # Annoncer le changement de propriété via le réseau
+            message = {
+                "type": "ownership_transfer",
+                "object_id": obj_id,
+                "new_owner_id": new_owner_id,
+                "timestamp": time.time()
+            }
+            
+            # Priorité moyenne (1)
+            heapq.heappush(self.message_queue, (1, message))
+            
+        return True
+        
+    def process_message(self, message):
+        """Traite un message réseau reçu"""
+        if message["type"] == "ownership_request":
+            obj_id = message["object_id"]
+            requester_id = message["requester_id"]
+            
+            # Si nous sommes le propriétaire, nous pouvons répondre
+            if obj_id in self.owners and self.owners[obj_id] == self.local_player_id:
+                self.transfer_ownership(obj_id, requester_id)
+                
+        elif message["type"] == "ownership_transfer":
+            obj_id = message["object_id"]
+            new_owner_id = message["new_owner_id"]
+            
+            # Mettre à jour notre copie locale de la propriété
+            if obj_id in self.owners:
+                with self.locks[obj_id]:
+                    self.owners[obj_id] = new_owner_id
+                    
+        elif message["type"] == "state_update":
+            # Mise à jour de l'état d'un objet
+            obj_id = message["object_id"]
+            state = message["state"]
+            
+            # Appliquer la mise à jour si nous ne sommes pas le propriétaire
+            if obj_id in self.owners and self.owners[obj_id] != self.local_player_id:
+                self.network_manager.apply_object_state(obj_id, state)
+                
+    def send_state_update(self, obj_id, state):
+        """Envoie une mise à jour d'état d'un objet"""
+        # Vérifier que nous sommes bien le propriétaire
+        if obj_id not in self.owners or self.owners[obj_id] != self.local_player_id:
+            return False
+            
+        message = {
+            "type": "state_update",
+            "object_id": obj_id,
+            "state": state,
+            "timestamp": time.time()
+        }
+        
+        # Priorité normale (2)
+        heapq.heappush(self.message_queue, (2, message))
+        return True
+        
+    def process_message_queue(self):
+        """Traite la file de messages prioritaires"""
+        current_time = time.time()
+        
+        # Traiter les messages en attente (max 10 par frame pour éviter les blocages)
+        for _ in range(min(10, len(self.message_queue))):
+            if self.message_queue:
+                _, message = heapq.heappop(self.message_queue)
+                self.network_manager.send_network_message(message)
+                
+        # Synchronisation périodique complète
+        if current_time - self.last_sync_time > self.sync_interval:
+            self.perform_full_sync()
+            self.last_sync_time = current_time
+            
+    def perform_full_sync(self):
+        """Effectue une synchronisation complète des objets dont nous sommes propriétaires"""
+        owned_objects = [obj_id for obj_id, owner in self.owners.items() if owner == self.local_player_id]
+        
+        if owned_objects:
+            sync_message = {
+                "type": "full_sync",
+                "objects": {
+                    obj_id: self.network_manager.get_object_state(obj_id)
+                    for obj_id in owned_objects
+                },
+                "timestamp": time.time()
+            }
+            
+            # Priorité basse (3) pour la synchronisation complète
+            heapq.heappush(self.message_queue, (3, sync_message))
