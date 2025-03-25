@@ -240,6 +240,7 @@ class TownCenter(Building):
     def __init__(self, player):
         super().__init__(player, "TownCenter", hp=1000, build_time=15 / Building.global_speed, cost={"Wood": 350}, size=4)
         self.symbol = 'T'
+        self.size = 4
         self.population_increase = 5
         self.training_queue = []
         self.sprite = "towncenter"

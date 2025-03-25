@@ -337,7 +337,8 @@ class NetworkManager:
                             self.local_map.place_unit(x, y, unit)
                             remote_player.units.append(unit)
                             #debug_print(f"Nouvelle unité {unit_id} ajoutée dans la tile ({x}, {y}) pour le joueur {remote_player.name}.")
-                        
+                print(unit_state)
+            
                 # MàJ des bâtiments
                 buildings_state = player.get("buildings", [])
                 building_mapping = {
@@ -353,18 +354,31 @@ class NetworkManager:
 
                 # Nettoyer les bâtiments qui n'existent plus
                 buildings_to_remove = []
+                print("debut building")
                 for building in remote_player.buildings if hasattr(remote_player, 'buildings') else []:
+                    print("for loop")
                     if not any(b_state.get("position") == building.position for b_state in buildings_state):
+                        print("not any")
                         buildings_to_remove.append(building)
+                        print(f"Building {building.name} removed from player {remote_player.name}")
                         # Retirer le bâtiment de sa tile
                         if hasattr(building, "position"):
                             x, y = building.position
-                            Building.kill_building(remote_player, building, self.local_map)
-                            
+                            building_class = building.__class__
+                            print(building_class)
+                            print(building_class.size)
+                            for i in range(building_class.size):    
+                                for j in range(building_class.size):
+                                    self.local_map.grid[y + j][x + i].building = None
+                            print(f"Building {building.name} removed from tile ({x}, {y})")
+                        else:
+                            print(f"Building {building.name} has no position attribute")
+                print(remote_player.buildings)
                 # Supprimer les bâtiments qui n'existent plus
                 for building in buildings_to_remove:
                     if hasattr(remote_player, 'buildings'):
                         remote_player.buildings.remove(building)
+                        print(f"Building {building.name} removed from player DADAZFAF{remote_player.name}")
 
                 # Initialiser la liste des bâtiments si elle n'existe pas
                 if not hasattr(remote_player, 'buildings'):
@@ -403,6 +417,8 @@ class NetworkManager:
 
                             # Placer le bâtiment sur toutes les tuiles qu'il occupe
                             self.local_map.place_building(x, y, new_building)
+                            remote_player.buildings.append(new_building)
+                print(building_state)
                             
 
     def close(self):
