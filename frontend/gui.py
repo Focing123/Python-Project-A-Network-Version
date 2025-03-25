@@ -1631,9 +1631,14 @@ class GUI(threading.Thread):
         hud_image = self.hud_image
         hud_width, hud_height = hud_image.get_size()
 
-        # Parcourir chaque joueur
-        for i, player in enumerate(self.game_data.players[:len(self.game_data.players)]):
-            if not player.units and not player.buildings:
+        # Inclure les joueurs distants
+        all_players = list(self.game_data.players)
+        if hasattr(self.game_data, 'network_manager') and self.game_data.network_manager:
+            all_players.extend(self.game_data.network_manager.remote_players.values())
+
+        # Parcourir chaque joueur (local et distant)
+        for i, player in enumerate(all_players):
+            if hasattr(player, 'units') and not player.units and hasattr(player, 'buildings') and not player.buildings:
                 continue
 
             y_position = y_start + i * (hud_height + spacing)  # Position verticale pour ce joueur
@@ -1701,12 +1706,20 @@ class GUI(threading.Thread):
         background_image = pygame.transform.scale(self.back, (fixed_width, dynamic_height))
         self.screen.blit(background_image, (x_start_background, 30))  # Placer l'image dans le coin supérieur droit
 
-        # Parcourir chaque joueur
-        for i, player in enumerate(self.game_data.players):
+        # Inclure les joueurs distants
+        all_players = list(self.game_data.players)
+        if hasattr(self.game_data, 'network_manager') and self.game_data.network_manager:
+            all_players.extend(self.game_data.network_manager.remote_players.values())
+
+        # Parcourir chaque joueur (local et distant)
+        for i, player in enumerate(all_players):
             y_position = y_start + i * player_display_height
 
-            # Afficher le nom du joueur
+            # Afficher le nom du joueur avec un préfixe pour les joueurs distants
             name_text = f"{player.name}"
+            if hasattr(player, 'sprite') and player.sprite == "remote":
+                name_text = f"[REMOTE] {name_text}"
+
             name_surface = font.render(name_text, True, text_color)
             self.screen.blit(name_surface, (x_start, y_position))
 
