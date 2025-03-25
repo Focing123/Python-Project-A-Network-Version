@@ -171,6 +171,10 @@ class GameEngine:
                         if self.map.grid != self.network_manager.local_map.grid or self.map.resources != self.network_manager.local_map.resources:
                             self.map = self.network_manager.local_map
                         self.last_state_update = self.current_time
+                        if len(self.network_manager.remote_players) > len(self.visitors):
+                            self.visitors = list(self.network_manager.remote_players.values())
+                            #print(f"New players connected: {self.visitors}")
+                    
 
                 # Handle input
                 curses.curs_set(0)  # Hide cursor
