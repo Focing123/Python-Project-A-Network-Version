@@ -225,12 +225,7 @@ class Unit:
                 debug_print(f"Not enough {resource_type} to train {unit_to_train}.", 'Yellow')
                 return
         if isinstance(unit_to_train, type):
-            if unit_to_train == Horseman:
-                unit_to_train = unit_to_train(player, position=(x, y))
-            elif unit_to_train == Villager:
-                unit_to_train = unit_to_train(player, position=(x, y))
-            else:
-                unit_to_train = unit_to_train(player)
+            unit_to_train = unit_to_train(player, position=(x, y))
         
         if player.population < min(player.max_population, sum(building.population_increase for building in player.buildings)):
             unit_to_train.spawn_position = (x, y)
