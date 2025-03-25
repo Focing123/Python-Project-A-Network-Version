@@ -165,7 +165,22 @@ int main(int argc, char* argv[]) {
     memset(&addr_broadcast_send, 0, sizeof(addr_broadcast_send));
     addr_broadcast_send.sin_family = AF_INET;
     addr_broadcast_send.sin_port = htons(BROADCAST_PORT);
-    addr_broadcast_send.sin_addr.s_addr = inet_addr("192.168.141.255");
+    char default_broadcast_addr[] = "192.168.141.255";
+    char user_input[INET_ADDRSTRLEN];
+
+    printf("Entrez l'adresse de broadcast (par défaut: %s): ", default_broadcast_addr);
+    fgets(user_input, INET_ADDRSTRLEN, stdin);
+
+    size_t len = strlen(user_input);
+    if (len > 0 && user_input[len - 1] == '\n') {
+        user_input[len - 1] = '\0';
+    }
+
+    if (strlen(user_input) == 0) {
+        strcpy(user_input, default_broadcast_addr);
+    }
+
+    addr_broadcast_send.sin_addr.s_addr = inet_addr(user_input);
 
     // Socket pour recevoir les broadcasts
     sock_forward = socket(AF_INET, SOCK_DGRAM, 0);
