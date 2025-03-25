@@ -1127,25 +1127,26 @@ class GUI(threading.Thread):
                     if visible_rect.collidepoint(resource_x, resource_y):
                         entities.append((resource_x, resource_y, "resource", tile.resource, 0))
 
-        # Collect player units and buildings
-        for player in self.game_data.players:
-            for unit in player.units:
-                iso_x, iso_y = self.cart_to_iso(unit.position[0], unit.position[1])
-                unit_x = iso_x + (self.game_data.map.height * self.TILE_WIDTH // 2)
-                unit_y = iso_y
-                if visible_rect.collidepoint(unit_x, unit_y):
-                    entities.append((unit_x, unit_y, "unit", unit,unit.z))
+        # Collect player and visitor units and buildings
+        for player_group in [self.game_data.players, self.game_data.visitors]:
+            for player in player_group:
+                for unit in player.units:
+                    iso_x, iso_y = self.cart_to_iso(unit.position[0], unit.position[1])
+                    unit_x = iso_x + (self.game_data.map.height * self.TILE_WIDTH // 2)
+                    unit_y = iso_y
+                    if visible_rect.collidepoint(unit_x, unit_y):
+                        entities.append((unit_x, unit_y, "unit", unit, unit.z))
 
-            for building in player.buildings:
-                bottom_right_x = building.position[0] + building.size - 2
-                bottom_right_y = building.position[1] + building.size
+                for building in player.buildings:
+                    bottom_right_x = building.position[0] + building.size - 2
+                    bottom_right_y = building.position[1] + building.size
 
-                iso_x, iso_y = self.cart_to_iso(bottom_right_x, bottom_right_y)
-                building_x = iso_x + (self.game_data.map.height * self.TILE_WIDTH // 2)
-                building_y = iso_y
+                    iso_x, iso_y = self.cart_to_iso(bottom_right_x, bottom_right_y)
+                    building_x = iso_x + (self.game_data.map.height * self.TILE_WIDTH // 2)
+                    building_y = iso_y
 
-                if visible_rect.collidepoint(building_x, building_y):
-                    entities.append((building_x, building_y, "building", building, building.z))
+                    if visible_rect.collidepoint(building_x, building_y):
+                        entities.append((building_x, building_y, "building", building, building.z))
 
             for rubble in self.game_data.map.rubbles:
                 iso_x, iso_y = self.cart_to_iso(rubble.position[0], rubble.position[1])
@@ -1156,9 +1157,11 @@ class GUI(threading.Thread):
 
 
         entities.sort(key=lambda e: (
-            0 if (e[2] == "building" and e[3].name == "Farm") or e[2] == "rubble" else 1,
+            0 if e[2] == "resource" else 
+            1 if (e[2] == "building" and e[3].name == "Farm") or e[2] == "rubble" else 
+            2,
             e[0] + e[1],  # Critère principal : somme des coordonnées pour l'ordre isométrique global
-             -(e[1] - (e[4] if e[2] == 'building' else 0)),  # Critère secondaire : profondeur en tenant compte de la taille
+            -(e[1] - (e[4] if e[2] == 'building' else 0)),  # Critère secondaire : profondeur en tenant compte de la taille
             e[1],
             ))
 
@@ -1185,7 +1188,7 @@ class GUI(threading.Thread):
                         screen_y - image.get_height() + (self.TILE_HEIGHT // 2)
                     ))
 
-            elif entity_type == "unit":
+            if entity_type == "unit":
                 unit_type = obj.sprite 
                 state = obj.task
                 direction = obj.direction
@@ -1213,7 +1216,9 @@ class GUI(threading.Thread):
 
                 if unit_type == "villager":
                     if state in self.villager_images and direction in self.villager_images[state]:
-                        images = self.player_villager_images[obj.player.id][state][direction]
+                        images = self.player_villager_images.get(obj.player.id, {}).get(state, {}).get(direction)
+                        if not images:
+                            images = self.player_villager_images.get(2, {}).get(state, {}).get(direction)
                         image = images[obj.current_frame % len(images)]
 
                 elif unit_type == "swordman":
@@ -1272,7 +1277,10 @@ class GUI(threading.Thread):
                 # Adjust sprite rendering based on building size
                 building_type = obj.name.replace(" ", "")
                 if building_type in self.building_images:
-                    image = self.player_building_images[obj.player.id][building_type]
+                    images = self.player_building_images.get(obj.player.id, {}).get(building_type)
+                    if not images:
+                        images = self.player_building_images.get(2, {}).get(building_type)
+                    image = images
 
                     # Adjust position for the sprite size
                     adjusted_y = screen_y - image.get_height() + (self.TILE_HEIGHT // 2)
@@ -1523,26 +1531,27 @@ class GUI(threading.Thread):
         self.screen.blit(self.mini_map_surface, (mini_map_x, mini_map_y), source_rect)
 
         # Draw players, units, and buildings dynamically
-        for player in self.game_data.players:
-            player_color = self.PLAYER_COLORS.get(player.id, (255, 255, 255))
+        for player_group in [self.game_data.players, self.game_data.visitors]:
+            for player in player_group:
+                player_color = self.PLAYER_COLORS.get(player.id, (255, 0, 0))
 
-            # Draw player units
-            for unit in player.units:
-                iso_x, iso_y = self.cart_to_iso(unit.position[0], unit.position[1])
-                tile_x = iso_x + (self.game_data.map.height * self.TILE_WIDTH // 2)
-                tile_y = iso_y
-                mini_map_iso_x = mini_map_x + (tile_x * (mini_map_width / map_width_px ))
-                mini_map_iso_y = mini_map_y + (tile_y * (mini_map_height / map_height_px))
-                pygame.draw.circle(self.screen, player_color, (int(mini_map_iso_x), int(mini_map_iso_y)), 2)
+                # Draw player units
+                for unit in player.units:
+                    iso_x, iso_y = self.cart_to_iso(unit.position[0], unit.position[1])
+                    tile_x = iso_x + (self.game_data.map.height * self.TILE_WIDTH // 2)
+                    tile_y = iso_y
+                    mini_map_iso_x = mini_map_x + (tile_x * (mini_map_width / map_width_px))
+                    mini_map_iso_y = mini_map_y + (tile_y * (mini_map_height / map_height_px))
+                    pygame.draw.circle(self.screen, player_color, (int(mini_map_iso_x), int(mini_map_iso_y)), 2)
 
-            # Draw player buildings
-            for building in player.buildings:
-                iso_x, iso_y = self.cart_to_iso(building.position[0], building.position[1])
-                tile_x = iso_x + (self.game_data.map.height * self.TILE_WIDTH // 2)
-                tile_y = iso_y
-                mini_map_iso_x = mini_map_x + (tile_x * (mini_map_width / map_width_px ))
-                mini_map_iso_y = mini_map_y + (tile_y * (mini_map_height / map_height_px))
-                pygame.draw.rect(self.screen, player_color, (mini_map_iso_x - 1, mini_map_iso_y - 1, 3, 3))
+                # Draw player buildings
+                for building in player.buildings:
+                    iso_x, iso_y = self.cart_to_iso(building.position[0], building.position[1])
+                    tile_x = iso_x + (self.game_data.map.height * self.TILE_WIDTH // 2)
+                    tile_y = iso_y
+                    mini_map_iso_x = mini_map_x + (tile_x * (mini_map_width / map_width_px))
+                    mini_map_iso_y = mini_map_y + (tile_y * (mini_map_height / map_height_px))
+                    pygame.draw.rect(self.screen, player_color, (mini_map_iso_x - 1, mini_map_iso_y - 1, 3, 3))
 
         # Draw the viewing rectangle
         view_rect_x = ((self.camera.offset_x / map_width_px) * mini_map_width) + mini_map_x
