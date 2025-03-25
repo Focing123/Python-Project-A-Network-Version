@@ -124,7 +124,7 @@ class NetworkManager:
         except socket.error as e:
             debug_print(f"Erreur lors de l'envoi UDP: {e}")
 
-    def receive_game_state(self, timeout=0.1):  # Increase timeout to 100ms
+    def receive_game_state(self, timeout=0.1,applystate = True):  # Increase timeout to 100ms
         self.recv_socket.settimeout(timeout)
         fragments = {}
         try:
@@ -147,7 +147,8 @@ class NetworkManager:
                             payload = pickle.loads(decompressed_data)
                             
                             if payload.get("type") == "game_data":
-                                self.apply_state_to_game(payload, sender_addr=addr)
+                                if applystate:
+                                    self.apply_state_to_game(payload, sender_addr=addr)
                                 return payload
                     else:
                         # Paquet unique
@@ -155,7 +156,8 @@ class NetworkManager:
                         payload = pickle.loads(decompressed_data)
                         
                         if payload.get("type") == "game_data":
-                            self.apply_state_to_game(payload, sender_addr=addr)
+                            if applystate:
+                                self.apply_state_to_game(payload, sender_addr=addr)
                             return payload
                             
                 except socket.timeout:

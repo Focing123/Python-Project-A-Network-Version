@@ -60,11 +60,11 @@ class GameEngine:
             network_buildings = []
             if self.network and self.network_manager:
                 # Attendre et recevoir l'état initial du jeu
-                initial_state = self.network_manager.receive_game_state(timeout=1.0)
+                initial_state = self.network_manager.receive_game_state(timeout=1.0, applygame=False)
                 if initial_state:
                     for player_state in initial_state.get("players", []):
                         for building in player_state.get("buildings", []):
-                            if building.get("name") == "Town Center" and building.get("position"):
+                            if building.get("name") == "TownCenter" and building.get("position"):
                                 network_buildings.append(
                                     (building["position"], player_state.get("player_id", "unknown"))
                                 )
