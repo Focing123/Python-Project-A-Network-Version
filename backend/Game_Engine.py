@@ -214,7 +214,7 @@ class GameEngine:
                     action.construct_building(self.players[2].units[1], Keep, 10, 10, self.players[2], self.get_current_time())
                     action.move_unit(self.players[1].units[1],15,15,self.get_current_time())
                 elif key == ord('u'):
-                    Building.kill_building(self.players[0], self.players[0].buildings[0], self.map)
+                    Unit.kill_unit(self.players[0], self.players[0].units[-1], self.map)
                 elif key == ord('y'):
                     Building.kill_building(self.players[0], self.players[0].buildings[-1], self.map)
                 elif key == ord('t'):

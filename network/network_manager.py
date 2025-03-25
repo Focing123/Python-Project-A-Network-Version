@@ -9,6 +9,7 @@ from frontend.Terrain import Gold, Wood  # Assurez-vous que le chemin d'import e
 from backend.Units import *
 from backend.Units import Villager, Swordsman, Horseman, Archer, Unit
 from backend.Building import *
+import backend.config
 import threading
 import time
 import heapq
@@ -50,7 +51,7 @@ class NetworkManager:
             s.close()
         return ip
 
-    def send_game_state(self, game_state, nature='data'):
+    def send_game_state(self, game_state):
         try:
             map_state = game_state.map.get_state()
         except AttributeError:
@@ -102,7 +103,8 @@ class NetworkManager:
             "height": getattr(game_state.map, "height", 0),
             "players": players_state,
             "actions": [],
-            "source_ip": self.local_ip  # Ajout de l'IP source
+            "source_ip": self.local_ip,  # Ajout de l'IP source
+            "distant_changes": backend.config.distant_changes
         }
         
         try:
@@ -132,6 +134,8 @@ class NetworkManager:
                 self.send_socket.sendto(pickle.dumps(packet), ("127.0.0.1", PY_TO_C_PORT))
         except socket.error as e:
             debug_print(f"Erreur lors de l'envoi UDP: {e}")
+        
+        backend.config.distant_changes = {}  # Réinitialiser les changements distants après l'envoi
 
     def receive_game_state(self, timeout=0.1,applystate = True):  # Increase timeout to 100ms
         self.recv_socket.settimeout(timeout)
@@ -217,6 +221,9 @@ class NetworkManager:
                             if resource_obj is not None:
                                 resource_obj.amount = amount
                                 self.local_map.grid[y][x].resource = resource_obj
+                    elif self.local_map.grid[y][x].resource.amount != amount:
+                        #debug_print(f"Mise à jour de la ressource de type {resource_type} à ({x}, {y}) avec quantité {amount}")
+                        self.local_map.grid[y][x].resource.amount = amount
 
             # MàJ des joueurs et de leurs unités
             players_state = payload.get("players", [])
@@ -353,10 +360,12 @@ class NetworkManager:
                         # Retirer le bâtiment de sa tile
                         if hasattr(building, "position"):
                             x, y = building.position
-                            if 0 <= y < len(self.local_map.grid) and 0 <= x < len(self.local_map.grid[y]):
-                                tile = self.local_map.grid[y][x]
-                                if hasattr(tile, 'building'):
-                                    tile.building = None
+                            for j in range(building.size[1]):
+                                for i in range(building.size[0]):
+                                    if 0 <= y + j < len(self.local_map.grid) and 0 <= x + i < len(self.local_map.grid[y + j]):
+                                        tile = self.local_map.grid[y + j][x + i]
+                                        if hasattr(tile, 'building'):
+                                            tile.building = None
 
                 # Supprimer les bâtiments qui n'existent plus
                 for building in buildings_to_remove:
