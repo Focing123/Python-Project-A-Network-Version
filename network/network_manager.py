@@ -7,7 +7,6 @@ import zlib  # Ajoutez cet import en haut du fichier
 from backend.logger import debug_print
 from frontend.Terrain import Gold, Wood  # Assurez-vous que le chemin d'import est correct
 from backend.Units import *
-from backend.Units import Villager, Swordsman, Horseman, Archer, Unit
 from backend.Building import *
 import backend.config
 import threading
@@ -290,7 +289,7 @@ class NetworkManager:
                             if 0 <= old_y < len(self.local_map.grid) and 0 <= old_x < len(self.local_map.grid[old_y]):
                                 old_tile = self.local_map.grid[old_y][old_x]
                                 if hasattr(old_tile, "unit") and existing_unit in old_tile.unit:
-                                    old_tile.unit.remove(existing_unit)
+                                    Unit.kill_unit(remote_player, existing_unit, self.local_map)
                             
                             # Placer l'unité à sa nouvelle position
                             if 0 <= y < len(self.local_map.grid) and 0 <= x < len(self.local_map.grid[y]):
@@ -360,15 +359,8 @@ class NetworkManager:
                         # Retirer le bâtiment de sa tile
                         if hasattr(building, "position"):
                             x, y = building.position
-                            building_class = type(building)
-                            building_size = getattr(building_class, 'size', (1, 1))
-                            for j in range(building_size[1]):
-                                for i in range(building_size[0]):
-                                    if 0 <= y + j < len(self.local_map.grid) and 0 <= x + i < len(self.local_map.grid[y + j]):
-                                        tile = self.local_map.grid[y + j][x + i]
-                                        if hasattr(tile, 'building'):
-                                            tile.building = None
-
+                            Building.kill_building(remote_player, building, self.local_map)
+                            
                 # Supprimer les bâtiments qui n'existent plus
                 for building in buildings_to_remove:
                     if hasattr(remote_player, 'buildings'):
