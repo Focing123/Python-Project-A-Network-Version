@@ -242,7 +242,7 @@ int main(int argc, char* argv[]) {
         // Traitement des messages depuis Python
         int recv_len = receiveComplete(sock_recv, buffer, BUFFER_SIZE, (struct sockaddr*)&addr_src, &addr_len);
         if (recv_len > 0) {
-            //debug_print("Reçu %d octets depuis Python\n", recv_len);
+            debug_print("Reçu %d octets depuis Python et transféré en broadcast\n", recv_len);
             // Transférer tel quel vers le broadcast
             forward_message(sock_broadcast, buffer, recv_len, 
                           (struct sockaddr*)&addr_broadcast_send, 
@@ -252,7 +252,7 @@ int main(int argc, char* argv[]) {
         // Traitement des messages broadcast
         recv_len = receiveComplete(sock_forward, buffer, BUFFER_SIZE, (struct sockaddr*)&addr_src, &addr_len);
         if (recv_len > 0) {
-            //debug_print("Reçu %d octets en broadcast\n", recv_len);
+            debug_print("Reçu %d octets en broadcast et transféré vers Python\n", recv_len);
             // Transférer tel quel vers Python
             forward_message(sock_forward, buffer, recv_len,
                           (struct sockaddr*)&addr_forward,
