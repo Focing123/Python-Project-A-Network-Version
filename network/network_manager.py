@@ -559,7 +559,6 @@ class NetworkManager:
             "type": "unit_attack",
             "source_ip": self.local_ip,
             "attacking_unit": {
-                "id": attacking_unit.id,
                 "position": attacking_unit.position,
                 "class": attacking_unit.__class__.__name__,
                 "hp": attacking_unit.hp,
@@ -567,7 +566,6 @@ class NetworkManager:
                 "task": "attacking"
             },
             "target_unit": {
-                "id": target_unit.id,
                 "position": target_unit.position,
                 "class": target_unit.__class__.__name__,
                 "hp": target_unit.hp,
