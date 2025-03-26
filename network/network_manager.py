@@ -590,6 +590,23 @@ class NetworkManager:
         except socket.error as e:
             debug_print(f"Erreur lors de l'envoi de l'attaque: {e}")
 
+    def apply_unit_attack(self, payload):
+        if payload.get('target_unit') is None or payload.get('attacking_unit') is None:
+            return
+        target_unit = payload['target_unit']
+        attacking_unit = payload['attacking_unit']
+        matching_unit = None
+        for local_unit in self.game_engine.players[0].units:
+            if (local_unit.position == local_unit.position and 
+                local_unit.__class__.__name__ == local_unit.__class__.__name__):
+                matching_unit = local_unit
+                break
+        if matching_unit:
+            matching_unit.hp = local_unit.hp
+            matching_unit.target_attack = local_unit.target_attack
+            matching_unit.is_attacked_by = attacking_unit
+            matching_unit.task = local_unit.task
+
 class RemotePlayer:
     def __init__(self, addr, name=None):
         self.addr = addr
