@@ -242,6 +242,8 @@ class NetworkManager:
                     elif self.local_map.grid[y][x].resource.amount != amount:
                         #debug_print(f"Mise à jour de la ressource de type {resource_type} à ({x}, {y}) avec quantité {amount}")
                         self.local_map.grid[y][x].resource.amount = amount
+                        if self.local_map.grid[y][x].resource.amount == 0:
+                            self.local_map.grid[y][x].resource = None
 
             # MàJ des joueurs et de leurs unités
             players_state = payload.get("players", [])
@@ -553,7 +555,7 @@ class NetworkManager:
         
         return None
 
-    def send_unit_attack(self, attacking_unit, target_unit):
+    def send_unit_attack(self, attacking_unit, target_unit , instantkill = False):
         """Envoie uniquement les informations d'attaque d'une unité"""
         attack_state = {
             "type": "unit_attack",
