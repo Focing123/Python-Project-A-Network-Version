@@ -106,7 +106,7 @@ class NetworkManager:
                     'units': [unit for unit in changes if isinstance(unit, Unit)],
                     'buildings': [building for building in changes if isinstance(building, Building)]
                 }
-        print(f"CORRECTED DISTANT CHANGES {(corrected_distant_changes)}")
+        #print(f"CORRECTED DISTANT CHANGES {(corrected_distant_changes)}")
 
         state = {
             "type": "game_data",
@@ -591,22 +591,26 @@ class NetworkManager:
     def apply_unit_attack(self, payload):
         if payload.get('target_unit') is None or payload.get('attacking_unit') is None:
             return
+        print("Apply unit attack")
+        print(self.game_engine.players[0].units)
         target_unit = payload['target_unit']
         attacking_unit = payload['attacking_unit']
         matching_unit = None
         for local_unit in self.game_engine.players[0].units:
-            if (local_unit.position == local_unit.position and 
+            if (local_unit.position == target_unit.get('position') and 
                 local_unit.__class__.__name__ == local_unit.__class__.__name__):
                 matching_unit = local_unit
                 break
         if matching_unit:
-            matching_unit.hp = local_unit.hp
-            matching_unit.target_attack = local_unit.target_attack
-            matching_unit.is_attacked_by = attacking_unit
-            matching_unit.task = local_unit.task
+            matching_unit.hp = target_unit.get('hp', 0)
+            matching_unit.target_attack = target_unit.get('target_attack')
+            matching_unit.is_attacked_by = target_unit.get('is_attacked_by')
+            matching_unit.task = target_unit.get('task')
+            print(matching_unit.hp)
             if matching_unit.hp <= 0:
                 Unit.kill_unit(self.game_engine.players[0], matching_unit, self.local_map)
                 self.local_map.grid[matching_unit.position[1]][matching_unit.position[0]].unit = None
+                print("Unit killed")
         
 
 class RemotePlayer:
