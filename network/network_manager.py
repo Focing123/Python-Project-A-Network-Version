@@ -298,7 +298,7 @@ class NetworkManager:
                         old_pos = existing_unit.position
                         if old_pos != tuple(pos):
                             # Retirer l'unité de son ancienne position
-                            old_x, old_y = old_pos
+                            old_x, old_y = map(int, old_pos)
                             if 0 <= old_y < len(self.local_map.grid) and 0 <= old_x < len(self.local_map.grid[old_y]):
                                 old_tile = self.local_map.grid[old_y][old_x]
                                 if hasattr(old_tile, "unit") and existing_unit in old_tile.unit:
@@ -326,7 +326,7 @@ class NetworkManager:
                     else:
                         # Créer une nouvelle unité
                         if 0 <= y < len(self.local_map.grid) and 0 <= x < len(self.local_map.grid[y]):
-                            tile = self.local_map.grid[y][x]
+                            tile = self.local_map.grid[int(y)][int(x)]
                             unit_class_name = unit_state.get("class")
                             unit_cls = unit_mapping.get(unit_class_name)
                             if unit_cls is None:

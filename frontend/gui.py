@@ -1223,12 +1223,16 @@ class GUI(threading.Thread):
 
                 elif unit_type == "swordman":
                    if state in self.swordman_images and direction in self.swordman_images[state]:
-                    images = self.player_swordman_images[obj.player.id][state][direction]
+                    images = self.player_swordman_images.get(obj.player.id, {}).get(state, {}).get(direction)
+                    if not images:
+                            images = self.player_swordman_images.get(2, {}).get(state, {}).get(direction)
                     image = images[obj.current_frame % len(images)]
 
                 elif unit_type == "archer":
                     if state in self.archer_images and direction in self.archer_images[state]:
-                        images = self.player_archer_images[obj.player.id][state][direction]
+                        images = self.player_archer_images.get(obj.player.id, {}).get(state, {}).get(direction)
+                        if not images:
+                            images = self.player_archer_images.get(2, {}).get(state, {}).get(direction)
                         if images:
                             # Dessiner l'archer
                             image = images[obj.current_frame % len(images)]
@@ -1262,7 +1266,9 @@ class GUI(threading.Thread):
 
                 elif unit_type == "horseman":
                     if state in self.horseman_images and direction in self.horseman_images[state]:
-                        images = self.player_horseman_images[obj.player.id][state][direction]
+                        images = self.player_horseman_images.get(obj.player.id, {}).get(state, {}).get(direction)
+                        if not images:
+                            images = self.player_horseman_images.get(2, {}).get(state, {}).get(direction)
                         image = images[obj.current_frame % len(images)]
                         
                 offset_x, offset_y = get_unit_offsets(unit_type,state, direction)

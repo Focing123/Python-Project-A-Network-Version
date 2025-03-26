@@ -21,7 +21,7 @@ class Map:
 
     def generate_resources(self):
         
-        num_resources = int(self.width * self.height * 0.02)  # 3% of the map as resource tiles
+        num_resources = int(self.width * self.height * 0.01)  # 3% of the map as resource tiles
 
         # Gold Generation
         num_gold = int(num_resources * 0.3)  # 30% of resource tiles as gold
