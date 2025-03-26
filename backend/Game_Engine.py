@@ -247,10 +247,10 @@ class GameEngine:
                     self.map.grid[1][1].resource = Wood()
                     self.map.resources["Wood"].append((1, 1))
                 elif key == ord('h'):
-                    self.map.grid[0][0].resource = None
+                    self.map.grid[0][0].resource.amount = 0
                     self.map.resources["Gold"].remove((0, 0))
                 elif key == ord('g'):
-                    self.map.grid[1][1].resource = None
+                    self.map.grid[1][1].resource.amount = 0
                     self.map.resources["Wood"].remove((1, 1))
 
                 #########################
