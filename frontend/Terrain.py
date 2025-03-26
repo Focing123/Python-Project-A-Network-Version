@@ -202,6 +202,13 @@ class Map:
                         elif tile.resource:
                             if tile.resource.amount <= 0:
                                 tile.resource = None
+                                # Mettre à jour les ressources de la map
+                                resource_type = tile.resource.type
+                                if (map_x, map_y) in self.resources[resource_type]:
+                                    self.resources[resource_type].remove((map_x, map_y))
+                                stdscr.addstr(y, x * 2, ".")  # Afficher un espace vide
+                            else:
+                                stdscr.addstr(y, x * 2, str(tile.resource))
                         else:
                             stdscr.addstr(y, x * 2, str(tile))
 
