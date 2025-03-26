@@ -604,6 +604,10 @@ class NetworkManager:
             matching_unit.target_attack = local_unit.target_attack
             matching_unit.is_attacked_by = attacking_unit
             matching_unit.task = local_unit.task
+            if matching_unit.hp <= 0:
+                Unit.kill_unit(self.game_engine.players[0], matching_unit, self.local_map)
+                self.local_map.grid[matching_unit.position[1]][matching_unit.position[0]].unit = None
+        
 
 class RemotePlayer:
     def __init__(self, addr, name=None):
