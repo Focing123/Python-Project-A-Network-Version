@@ -7,7 +7,7 @@ from frontend.Terrain import *
 from logger import debug_print
 from Units import *
 from Building import *
-import config
+import backend.config
 
 
 class Action:
@@ -503,15 +503,15 @@ class Action:
                     if not isinstance(enemy_unit, Building):
                         enemy_unit.is_attacked_by = unit
                         enemy_unit.task = "is_attacked"
-                if enemy_unit.player not in config.distant_changes:
-                    config.distant_changes[enemy_unit.player] = []
-                if enemy_unit in config.distant_changes[enemy_unit.player]:
-                    index = config.distant_changes[enemy_unit.player].index(enemy_unit)
-                    config.distant_changes[enemy_unit.player][index] = enemy_unit
+                if enemy_unit.player not in backend.config.distant_changes:
+                    backend.config.distant_changes[enemy_unit.player] = []
+                if enemy_unit in backend.config.distant_changes[enemy_unit.player]:
+                    index = backend.config.distant_changes[enemy_unit.player].index(enemy_unit)
+                    backend.config.distant_changes[enemy_unit.player][index] = enemy_unit
                 else:
-                    config.distant_changes[enemy_unit.player].append(enemy_unit)
+                    backend.config.distant_changes[enemy_unit.player].append(enemy_unit)
                 unit.last_hit_time = current_time_called
-                print(config.distant_changes)
+                print(backend.config.distant_changes)
         else:
             unit.task = "going_to_battle"  # Reset to movement phase
             self.debug_print(f"not entering attack phase, distance: {distance}", 'Red')

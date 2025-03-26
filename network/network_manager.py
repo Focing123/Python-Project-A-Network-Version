@@ -94,6 +94,19 @@ class NetworkManager:
                     "resources": getattr(player, "owned_resources", {})
                 }
             players_state.append(p_state)
+        #print(f"NETWORH {id(backend.config.distant_changes)}")
+        #print(backend.config.distant_changes)
+        corrected_distant_changes = {}
+        for addr, player in self.remote_players.items():
+            # Extraire l'adresse IP du tuple addr (qui est de la forme (ip, port))
+            ip_addr = addr[0]
+            if player in backend.config.distant_changes and backend.config.distant_changes[player]:
+                changes = backend.config.distant_changes[player]
+                corrected_distant_changes[ip_addr] = {
+                    'units': [unit for unit in changes if isinstance(unit, Unit)],
+                    'buildings': [building for building in changes if isinstance(building, Building)]
+                }
+        #print(f"CORRECTED DISTANT CHANGES {(corrected_distant_changes)}")
 
         state = {
             "type": "game_data",
@@ -103,7 +116,7 @@ class NetworkManager:
             "players": players_state,
             "actions": [],
             "source_ip": self.local_ip,  # Ajout de l'IP source
-            "distant_changes": backend.config.distant_changes
+            "distant_changes": corrected_distant_changes
         }
         
         try:
@@ -258,7 +271,7 @@ class NetworkManager:
                         if hasattr(unit, "position"):
                             x, y = unit.position
                             if 0 <= y < len(self.local_map.grid) and 0 <= x < len(self.local_map.grid[y]):
-                                tile = self.local_map.grid[y][x]
+                                tile = self.local_map.grid[int(y)][int(x)]
                                 if hasattr(tile, "unit") and unit in tile.unit:
                                     tile.unit.remove(unit)
 
@@ -293,7 +306,7 @@ class NetworkManager:
                             
                             # Placer l'unité à sa nouvelle position
                             if 0 <= y < len(self.local_map.grid) and 0 <= x < len(self.local_map.grid[y]):
-                                new_tile = self.local_map.grid[y][x]
+                                new_tile = self.local_map.grid[int(y)][int(x)]
                                 if not hasattr(new_tile, "unit") or new_tile.unit is None:
                                     new_tile.unit = []
                                 new_tile.unit.append(existing_unit)
@@ -337,7 +350,6 @@ class NetworkManager:
                             self.local_map.place_unit(x, y, unit)
                             remote_player.units.append(unit)
                             #debug_print(f"Nouvelle unité {unit_id} ajoutée dans la tile ({x}, {y}) pour le joueur {remote_player.name}.")
-                print(unit_state)
             
                 # MàJ des bâtiments
                 buildings_state = player.get("buildings", [])
@@ -404,7 +416,6 @@ class NetworkManager:
                             # Placer le bâtiment sur toutes les tuiles qu'il occupe
                             self.local_map.place_building(x, y, new_building)
                             remote_player.buildings.append(new_building)
-                print(building_state)
                             
 
     def close(self):
