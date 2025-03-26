@@ -610,6 +610,7 @@ class NetworkManager:
             if matching_unit.hp <= 0:
                 Unit.kill_unit(self.game_engine.players[0], matching_unit, self.local_map)
                 self.local_map.grid[matching_unit.position[1]][matching_unit.position[0]].unit = None
+                self.remote_players[payload.get('source_ip')].units.remove(matching_unit)
                 print("Unit killed")
         
 

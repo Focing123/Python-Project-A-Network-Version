@@ -199,6 +199,9 @@ class Map:
                                 player_id = unit.player.id
                                 color_pair = curses.color_pair((player_id % 8) + 1)  # Cycle through colors
                                 stdscr.addstr(y, x * 2, str(unit), color_pair)
+                        elif tile.resource:
+                            if tile.resource.amount <= 0:
+                                tile.resource = None
                         else:
                             stdscr.addstr(y, x * 2, str(tile))
 
