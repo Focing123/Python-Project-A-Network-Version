@@ -511,7 +511,7 @@ class Action:
                 else:
                     backend.config.distant_changes[enemy_unit.player].append(enemy_unit)
                 unit.last_hit_time = current_time_called
-                print(backend.config.distant_changes)
+                #print(backend.config.distant_changes)
         else:
             unit.task = "going_to_battle"  # Reset to movement phase
             self.debug_print(f"not entering attack phase, distance: {distance}", 'Red')

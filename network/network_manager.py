@@ -106,7 +106,7 @@ class NetworkManager:
                     'units': [unit for unit in changes if isinstance(unit, Unit)],
                     'buildings': [building for building in changes if isinstance(building, Building)]
                 }
-        #print(f"CORRECTED DISTANT CHANGES {(corrected_distant_changes)}")
+        print(f"CORRECTED DISTANT CHANGES {(corrected_distant_changes)}")
 
         state = {
             "type": "game_data",
@@ -147,7 +147,7 @@ class NetworkManager:
         except socket.error as e:
             debug_print(f"Erreur lors de l'envoi UDP: {e}")
         
-        backend.config.distant_changes = {}  # Réinitialiser les changements distants après l'envoi
+        #backend.config.distant_changes = {}  # Réinitialiser les changements distants après l'envoi
 
     def receive_game_state(self, timeout=0.1,applystate = True):  # Increase timeout to 100ms
         self.recv_socket.settimeout(timeout)

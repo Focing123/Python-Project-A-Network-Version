@@ -181,7 +181,9 @@ class GameEngine:
                     if self.current_time - self.last_state_update >= self.state_update_interval:
                         payload_changes = self.network_manager.receive_game_state()
                         if payload_changes:
+                            self.debug_print(payload_changes)
                             if payload_changes.get('distant_changes'):
+                                self.debug_print("YOUPIIIIIIIIIIIIII")
                                 if self.local_ip in payload_changes.get('distant_changes', {}):
                                     local_changes = payload_changes['distant_changes'][self.local_ip]
                                     
