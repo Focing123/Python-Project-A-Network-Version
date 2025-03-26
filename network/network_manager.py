@@ -149,7 +149,7 @@ class NetworkManager:
         
         #backend.config.distant_changes = {}  # Réinitialiser les changements distants après l'envoi
 
-    def receive_game_state(self, timeout=0.1,applystate = True):  # Increase timeout to 100ms
+    def receive_game_state(self, timeout=0.1, applystate=True):  # Increase timeout to 100ms
         self.recv_socket.settimeout(timeout)
         fragments = {}
         try:
@@ -180,13 +180,19 @@ class NetworkManager:
                         decompressed_data = zlib.decompress(packet['data'])
                         payload = pickle.loads(decompressed_data)
                         
-                        if payload.get("type") == "game_data":
+                        # Ajouter le traitement des attaques d'unités
+                        if payload.get("type") == "unit_attack":
+                            if payload.get("source_ip") != self.local_ip:
+                                self.apply_unit_attack(payload)
+                            return payload
+                        
+                        elif payload.get("type") == "game_data":
                             if applystate:
                                 self.apply_state_to_game(payload, sender_addr=addr)
                             return payload
                         
                         # Ajouter le traitement des messages spécifiques
-                        if packet.get('type') == "network_message":
+                        elif packet.get('type') == "network_message":
                             message_content = packet.get('content')
                             if message_content and packet.get('node_id') != self.node_id:
                                 self.properties_manager.process_message(message_content)
@@ -546,6 +552,58 @@ class NetworkManager:
                         return building
         
         return None
+
+    def send_unit_attack(self, attacking_unit, target_unit):
+        """Envoie uniquement les informations d'attaque d'une unité"""
+        attack_state = {
+            "type": "unit_attack",
+            "source_ip": self.local_ip,
+            "attacking_unit": {
+                "position": attacking_unit.position,
+                "class": attacking_unit.__class__.__name__,
+                "hp": attacking_unit.hp,
+                "target_attack": target_unit.id if hasattr(target_unit, 'id') else None,
+                "task": "attacking"
+            },
+            "target_unit": {
+                "position": target_unit.position,
+                "class": target_unit.__class__.__name__,
+                "hp": target_unit.hp,
+                "is_attacked_by": attacking_unit.id if hasattr(attacking_unit, 'id') else None,
+                "task": "is_attacked"
+            }
+        }
+
+        try:
+            # Sérialiser et compresser les données
+            pickle_payload = pickle.dumps(attack_state)
+            compressed_payload = zlib.compress(pickle_payload)
+            
+            # Envoi direct du paquet
+            packet = {
+                'fragment': False,
+                'data': compressed_payload
+            }
+            self.send_socket.sendto(pickle.dumps(packet), ("127.0.0.1", PY_TO_C_PORT))
+        except socket.error as e:
+            debug_print(f"Erreur lors de l'envoi de l'attaque: {e}")
+
+    def apply_unit_attack(self, payload):
+        if payload.get('target_unit') is None or payload.get('attacking_unit') is None:
+            return
+        target_unit = payload['target_unit']
+        attacking_unit = payload['attacking_unit']
+        matching_unit = None
+        for local_unit in self.game_engine.players[0].units:
+            if (local_unit.position == local_unit.position and 
+                local_unit.__class__.__name__ == local_unit.__class__.__name__):
+                matching_unit = local_unit
+                break
+        if matching_unit:
+            matching_unit.hp = local_unit.hp
+            matching_unit.target_attack = local_unit.target_attack
+            matching_unit.is_attacked_by = attacking_unit
+            matching_unit.task = local_unit.task
 
 class RemotePlayer:
     def __init__(self, addr, name=None):

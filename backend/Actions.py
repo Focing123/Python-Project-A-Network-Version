@@ -8,12 +8,14 @@ from logger import debug_print
 from Units import *
 from Building import *
 import backend.config
+from network.network_manager import NetworkManager
 
 
 class Action:
     def __init__(self, game_map):
         self.map = game_map
         self.debug_print = debug_print
+        self.network_manager = NetworkManager()
 
 
     def get_direction(self, start_x, start_y, target_x, target_y):
@@ -503,15 +505,9 @@ class Action:
                     if not isinstance(enemy_unit, Building):
                         enemy_unit.is_attacked_by = unit
                         enemy_unit.task = "is_attacked"
-                if enemy_unit.player not in backend.config.distant_changes:
-                    backend.config.distant_changes[enemy_unit.player] = []
-                if enemy_unit in backend.config.distant_changes[enemy_unit.player]:
-                    index = backend.config.distant_changes[enemy_unit.player].index(enemy_unit)
-                    backend.config.distant_changes[enemy_unit.player][index] = enemy_unit
-                else:
-                    backend.config.distant_changes[enemy_unit.player].append(enemy_unit)
-                unit.last_hit_time = current_time_called
+                self.network_manager.send_unit_attack(unit, enemy_unit)
                 #print(backend.config.distant_changes)
+
         else:
             unit.task = "going_to_battle"  # Reset to movement phase
             self.debug_print(f"not entering attack phase, distance: {distance}", 'Red')

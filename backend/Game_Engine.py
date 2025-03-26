@@ -179,60 +179,12 @@ class GameEngine:
                     
                     # Code existant pour l'envoi et la réception d'états
                     if self.current_time - self.last_state_update >= self.state_update_interval:
-                        payload_changes = self.network_manager.receive_game_state()
-                        if payload_changes:
-                            self.debug_print(payload_changes)
-                            if payload_changes.get('distant_changes'):
-                                self.debug_print("YOUPIIIIIIIIIIIIII")
-                                if self.local_ip in payload_changes.get('distant_changes', {}):
-                                    local_changes = payload_changes['distant_changes'][self.local_ip]
-                                    
-                                    # Pour les unités
-                                    for distant_unit in local_changes.get('units', []):
-                                        # Vérifier si une unité locale correspond (même position et même classe)
-                                        if hasattr(distant_unit, 'position') and hasattr(distant_unit, '__class__'):
-                                            matching_unit = None
-                                            for local_unit in self.players[0].units:
-                                                if (local_unit.position == distant_unit.position and 
-                                                    local_unit.__class__.__name__ == distant_unit.__class__.__name__):
-                                                    matching_unit = local_unit
-                                                    break
-                                            
-                                            # Si on trouve une correspondance, on met à jour ses attributs
-                                            if matching_unit:
-                                                # Liste des attributs à mettre à jour
-                                                attributes_to_update = [
-                                                    "hp", "target_position", "target_attack",
-                                                    "is_attacked_by", "is_moving", "task"
-                                                ]
-                                                
-                                                # Mise à jour des attributs s'ils existent dans l'unité distante
-                                                for attr in attributes_to_update:
-                                                    if hasattr(distant_unit, attr):
-                                                        setattr(matching_unit, attr, getattr(distant_unit, attr))
-                                    
-                                    # Pour les bâtiments (garder le code existant ou implémenter une logique similaire)
-                                    for building in local_changes.get('buildings', []):
-                                        if hasattr(building, 'position') and hasattr(building, '__class__'):
-                                            matching_building = None
-                                            for local_building in self.players[0].buildings:
-                                                if (local_building.position == building.position and 
-                                                    local_building.__class__.__name__ == building.__class__):
-                                                    matching_building = local_building
-                                                    break
-                                            
-                                            if matching_building:
-                                                attributes_to_update = [
-                                                    "hp", "is_attacked"
-                                                ]
-                                                
-                                                for attr in attributes_to_update:
-                                                    if hasattr(building, attr):
-                                                        setattr(matching_building, attr, getattr(building, attr))                                  
-
                         self.send_multiplayer_state()
+                        self.network_manager.receive_game_state()
+                        
                         if self.map.grid != self.network_manager.local_map.grid or self.map.resources != self.network_manager.local_map.resources:
                             self.map = self.network_manager.local_map
+                            self.players[0].units = self.network_manager.game_engine.players[0].units
                         self.last_state_update = self.current_time
                         if len(self.network_manager.remote_players) > len(self.visitors):
                             self.visitors = list(self.network_manager.remote_players.values())
